@@ -177,13 +177,25 @@ verifier, _ := fetcher.Verifier()
 ### Validate
 
 ```go
-validator := &jwt.IDTokenValidator{
-    ValidatorCore: jwt.ValidatorCore{
-        Iss: []string{"https://issuer.example.com"},
-        Aud: []string{"my-service"},
-    },
+validator := jwt.NewIDTokenValidator(
+    []string{"https://issuer.example.com"},
+    []string{"my-service"},
+    nil, // azp
+)
+errs := validator.Validate(nil, &claims, time.Now())
+if len(errs) > 0 {
+    // handle validation errors
 }
-validator.Validate(&claims, time.Now())
+```
+
+For OAuth 2.1 access tokens:
+
+```go
+validator := jwt.NewAccessTokenValidator(
+    []string{"https://issuer.example.com"},
+    []string{"my-service"},
+    "openid", "profile",
+)
 ```
 
 ### Algorithms
