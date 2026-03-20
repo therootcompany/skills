@@ -10,6 +10,7 @@ description: Go development conventions. Use when writing Go HTTP handlers, rout
 | Go | 1.26+ |
 | ENV | godotenv |
 | HTTP | `net/http` mux, `r.PathValue()` |
+| UI Embed | `github.com/vearutop/statigz` |
 | Middleware | `github.com/therootcompany/golib/http/middleware` |
 | Database | `github.com/jackc/pgx/v5` |
 | ORM | sqlc |
@@ -17,18 +18,31 @@ description: Go development conventions. Use when writing Go HTTP handlers, rout
 | JWT | `github.com/therootcompany/golib/auth/jwt` |
 | Data | `github.com/jszwec/csvutil` (TSV default) |
 
+CLI tools: `envauth` (env-based auth), `csvauth` (CSV auth), `gsheet2csv` (Google Sheet → CSV), `gsheet2env` (Google Sheet → .env).
+
+Type safety: avoid `any`; use shallow interfaces or create marker interfaces.
+
 ## Version features
 
 | Feature | Use | Since |
 |---------|-----|-------|
 | HTTP routing | `mux.HandleFunc("GET /{id}", h)`, `r.PathValue("id")` | 1.22 |
-| JSON omitzero | `json:"f,omitzero"` for T vs *T | 1.24 |
+| JSON omitzero | `json:"f,omitzero"` for T vs *T and NullBool | 1.24 |
 | Loop variables | Per-iteration scope (no `i := i`) | 1.22 |
 | Iterators | `iter` package, `range` over func | 1.23 |
 | Random | `math/rand/v2` | 1.22 |
 | Null types | `database/sql.Null[T]` | 1.22 |
 | Crypto CSPRNG | `crypto/*` uses internal CSPRNG | 1.26 |
+| Crypto big ints | `.Bytes()` methods instead of `math/big` | 1.25 |
 | PBKDF2 | `crypto/pbkdf2` | 1.24 |
+
+Version history (for citing): 1.26 (CSPRNG, inline pointer `new(T{f: v})`), 1.25 (`.Bytes()`), 1.24 (`omitzero`, `os.Root`, `go tool`), 1.23 (iter), 1.22 (ServeMux, per-iteration loops, `range` int).
+
+Ref: https://go.dev/doc/go1.xx
+
+## Production-first
+
+Build for production from the start. Error handling, logging, auth, graceful shutdown are part of initial implementation, not polish.
 
 ## API Router
 
@@ -55,7 +69,7 @@ mux.Handle("GET /api/items", authM.Then(handleListItems))
 - TSV for data exports
 - Add bins to .gitignore
 
-## TSV Endpoint Pattern
+## TSV Endpoint
 
 ### 1. SQL query
 
@@ -91,6 +105,8 @@ func HandleItemsAllTSV(w http.ResponseWriter, r *http.Request) {
     }
 }
 ```
+
+Use `csv:",inline"` to flatten nested structs into a row. Offer `.json` suffix as secondary format.
 
 ### 4. Register
 
@@ -136,6 +152,52 @@ type AppClaims struct {
 }
 ```
 
+### JWKS endpoint
+
+```go
+json.Marshal(&signer) // {"keys":[...]}
+```
+
+### Remote JWKS
+
+```go
+fetcher := &jwt.KeyFetcher{
+    URL: "https://issuer.example.com/.well-known/jwks.json",
+    MaxAge: time.Hour,
+    StaleAge: 30 * time.Minute,
+}
+verifier, _ := fetcher.Verifier()
+```
+
+### Validate
+
+```go
+validator := &jwt.IDTokenValidator{
+    ValidatorCore: jwt.ValidatorCore{
+        Iss: []string{"https://issuer.example.com"},
+        Aud: []string{"my-service"},
+    },
+}
+validator.Validate(&claims, time.Now())
+```
+
+### Algorithms
+
+Ed25519 (EdDSA), EC P-256/384/521 (ES256/384/512), RSA (RS256). Algorithm inferred from key type — never configured manually.
+
+### JWK key management
+
+```go
+pk, _ := jwk.NewPrivateKey()
+keys, _ := jwk.ReadFile("path/to/keys.jwks")
+data, _ := json.Marshal(jwk.JWKs{Keys: verifier.PublicKeys()})
+switch key := pub.CryptoPublicKey.(type) {
+case *ecdsa.PublicKey:
+case *rsa.PublicKey:
+case ed25519.PublicKey:
+}
+```
+
 ## Error Handling
 
 ### Sentinel errors
@@ -150,6 +212,18 @@ var ErrNotFound = errors.New("not found")
 fmt.Errorf("%w: exp: token expired", ErrInvalidClaim)  // broad first
 fmt.Errorf("header json: %w", err)                      // specific last
 fmt.Errorf("payload base64: %w: %w", ErrInvalidPayload, err)  // Go 1.20+
+```
+
+### Composable hierarchies
+
+```go
+var (
+    ErrInvalidClaim = errors.New("invalid claim value")
+    ErrAfterExp  = fmt.Errorf("%w: exp: token expired", ErrInvalidClaim)
+    ErrBeforeNbf = fmt.Errorf("%w: nbf: token not yet valid", ErrInvalidClaim)
+)
+// errors.Is(err, ErrAfterExp)    — matches expired only
+// errors.Is(err, ErrInvalidClaim) — matches any invalid
 ```
 
 ### Multi-error
@@ -173,10 +247,13 @@ go test ./...
 go vet ./...
 ```
 
+If sqlc-generated packages produce spurious vet warnings, use a wrapper script that excludes them.
+
 ## Go doc
 
 ```sh
 go doc <package>
 go doc <package>.<Symbol>
 go doc -all <package>
+go doc -src <package>.<Symbol>
 ```
