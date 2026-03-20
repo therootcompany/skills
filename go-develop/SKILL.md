@@ -56,6 +56,7 @@ mux.HandleFunc("POST /api/items", handleCreateItem)
 ## Middleware
 
 ```go
+// import "github.com/therootcompany/golib/http/middleware"
 baseM := middleware.New(loggingMiddleware, realIPMiddleware)
 authM := baseM.Add(jwtMiddleware)
 adminM := authM.Add(requireAdminMiddleware)
@@ -90,6 +91,7 @@ sqlc generate
 ### 3. Handler
 
 ```go
+// import "github.com/jszwec/csvutil"
 func HandleItemsAllTSV(w http.ResponseWriter, r *http.Request) {
     since := parseOptionalTime(r.URL.Query().Get("since"))
     rows, err := queries.ItemAll(r.Context(), db.ItemAllParams{Since: since})
@@ -131,6 +133,7 @@ With `_migrations` tracking table:
 ### Issue
 
 ```go
+// import "github.com/therootcompany/golib/auth/jwt"
 pk, _ := jwk.NewPrivateKey()
 signer, _ := jwt.NewSigner([]jwk.PrivateKey{*pk})
 tokenStr, _ := signer.SignToString(&claims)
