@@ -49,4 +49,4 @@ Imperative content...
 **Global:** `~/Agents/skills/<name>/SKILL.md`  
 **Project-local:** `skills/<name>/SKILL.md` (from project root)
 
-Commit skills to git.
+Branch with `git`, PR with `gh`, pull with `git`.
