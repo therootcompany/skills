@@ -264,7 +264,7 @@ go test ./...
 go vet ./...
 ```
 
-If sqlc-generated packages produce spurious vet warnings, use a wrapper script that excludes them.
+If sqlc-generated packages produce spurious vet warnings, use a wrapper script that excludes them. See [sqlc query design skill](../sqlc-query-design/SKILL.md).
 
 ## Go doc
 
