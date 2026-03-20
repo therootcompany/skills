@@ -8,14 +8,14 @@ description: Create a SKILL.md. Triggered when user asks to create a skill, docu
 Ask: global (`~/Agents/skills/<name>/`) or project-local (`skills/<name>/`)?
 
 - **Global** — cross-project conventions (shell, JS, SQL patterns)
-- **Project-local** — repo-specific patterns (routing, migrations)
+- **Project-local** — API patterns, db schemas, build tooling specific to this codebase
 
 ## Naming
 
 - Directory name = `name` field exactly
 - Lowercase, numbers, hyphens only
 - No leading/trailing/consecutive hyphens
-- Short, action-oriented: `go-sqlc`, `shell`, `javascript`
+- Short, action-oriented: `write-go`, `write-shell-scripts`, `write-javascript`
 
 ## Description (frontmatter)
 
@@ -49,4 +49,4 @@ Imperative content...
 **Global:** `~/Agents/skills/<name>/SKILL.md`  
 **Project-local:** `skills/<name>/SKILL.md` (from project root)
 
-Commit project-local skills to git.
+Commit skills to git.
