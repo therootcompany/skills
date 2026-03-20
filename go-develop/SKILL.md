@@ -101,7 +101,9 @@ func HandleItemsAllTSV(w http.ResponseWriter, r *http.Request) {
     enc := csvutil.NewEncoder(w)
     enc.Delimiter = '\t'
     for _, row := range rows {
-        enc.Encode(row)
+        if err := enc.Encode(row); err != nil {
+            return
+        }
     }
 }
 ```
