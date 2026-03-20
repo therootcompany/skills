@@ -5,7 +5,7 @@ description: Create a SKILL.md. Triggered when user asks to create a skill, docu
 
 ## Scope
 
-Ask: global (`~/.claude/skills/<name>/`) or project-local (`skills/<name>/`)?
+Ask: global (`~/Agents/skills/<name>/`) or project-local (`skills/<name>/`)?
 
 - **Global** — cross-project conventions (shell, JS, SQL patterns)
 - **Project-local** — repo-specific patterns (routing, migrations)
@@ -46,7 +46,7 @@ Imperative content...
 
 ## Placement
 
-**Global:** `~/.claude/skills/<name>/SKILL.md`  
-**Project-local:** `skills/<name>/SKILL.md`
+**Global:** `~/Agents/skills/<name>/SKILL.md`  
+**Project-local:** `skills/<name>/SKILL.md` (from project root)
 
 Commit project-local skills to git.
