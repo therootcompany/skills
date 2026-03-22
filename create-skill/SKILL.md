@@ -5,7 +5,7 @@ description: Create a SKILL.md. Triggered when user asks to create a skill, docu
 
 ## Scope
 
-Ask: global (`~/.claude/skills/<name>/`) or project-local (`skills/<name>/`)?
+Ask: global (`~/Agent/skills/<name>/`) or project-local (`./skills/<name>/`)?
 
 - **Global** — cross-project conventions (shell, JS, SQL patterns)
 - **Project-local** — repo-specific patterns (routing, migrations)
@@ -20,6 +20,7 @@ Ask: global (`~/.claude/skills/<name>/`) or project-local (`skills/<name>/`)?
 ## Description (frontmatter)
 
 1–3 sentences max. Must include:
+
 - What the skill does
 - When to activate it (trigger keywords)
 - Max 1024 chars
@@ -29,7 +30,6 @@ Ask: global (`~/.claude/skills/<name>/`) or project-local (`skills/<name>/`)?
 - Keep under 500 lines
 - Use imperatives, not prose
 - Move long refs to `references/<name>.md`, link from here
-- No meta-commentary ("tips", "best practices")
 
 ## Structure
 
@@ -46,7 +46,7 @@ Imperative content...
 
 ## Placement
 
-**Global:** `~/.claude/skills/<name>/SKILL.md`  
-**Project-local:** `skills/<name>/SKILL.md`
+**Global:** `~/Agents/skills/<name>/SKILL.md`
+**Project-local:** `./skills/<name>/SKILL.md`
 
 Commit project-local skills to git.
