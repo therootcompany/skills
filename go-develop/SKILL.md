@@ -63,6 +63,50 @@ adminM := authM.Add(requireAdminMiddleware)
 mux.Handle("GET /api/items", authM.Then(handleListItems))
 ```
 
+## CLI Flags
+
+Use `flag.FlagSet` (not the global `flag` package) so subcommands and libraries stay composable:
+
+```go
+fs := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+verbose := fs.Bool("verbose", false, "verbose output")
+human := fs.Bool("h", false, "human-readable output")  // -h reserved for --human-readable
+if err := fs.Parse(os.Args[1:]); err != nil {
+    if errors.Is(err, flag.ErrHelp) {
+        os.Exit(0)
+    }
+    os.Exit(1)
+}
+```
+
+### Help and version aliases
+
+Handle before calling `fs.Parse`:
+
+```go
+if len(os.Args) > 1 {
+    switch os.Args[1] {
+    case "-V", "-version", "--version", "version":
+        printVersion(os.Stdout)
+        os.Exit(0)
+    case "help", "-help", "--help":
+        printVersion(os.Stdout)
+        _, _ = fmt.Fprintln(os.Stdout, "")
+        fs.SetOutput(os.Stdout)
+        fs.Usage()
+        os.Exit(0)
+    }
+}
+```
+
+`fs.SetOutput(os.Stdout)` is required because `flag.FlagSet` defaults to stderr; help should go to stdout.
+
+**Flag reservations:**
+- `-h` — `--human-readable` (never `--help`)
+- `-v` — `--verbose` (never `--version`)
+- `-V`, `-version`, `--version`, `version` — print version and exit
+- `help`, `-help`, `--help` — print version + blank line + usage, then exit
+
 ## Config
 
 - No YAML unless required by a 3rd party tool
