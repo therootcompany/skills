@@ -14,9 +14,11 @@ description: Go development conventions. Use when writing Go HTTP handlers, rout
 | Middleware | `github.com/therootcompany/golib/http/middleware` |
 | Database | `github.com/jackc/pgx/v5` |
 | ORM | sqlc |
-| Migrations | `github.com/therootcompany/golib/cmd/sql-migrate` |
+| Migrations | `github.com/therootcompany/golib/cmd/sql-migrate/v2` @ v2.1.1 |
 | JWT | `github.com/therootcompany/golib/auth/jwt` |
 | Data | `github.com/jszwec/csvutil` (TSV default) |
+| DNS (providers) | `github.com/libdns/libdns` — approved; use for multi-provider DNS |
+| DNS (low-level) | `github.com/miekg/dns` — approved when `net` stdlib is not sufficient (e.g. raw queries, custom resolvers, DNSSEC); prefer stdlib `net.Resolver` for simple lookups |
 
 CLI tools: `envauth` (env-based auth), `csvauth` (CSV auth), `gsheet2csv` (Google Sheet → CSV), `gsheet2env` (Google Sheet → .env).
 
@@ -165,12 +167,85 @@ mux.Handle("GET /api/items.json", authM.Then(HandleItemsAllJSON))
 
 ## Migrations
 
-Use `github.com/therootcompany/golib/cmd/sql-migrate`. File naming: `YYYY-MM-DD-HHMMSS_description.up.sql` / `.down.sql`.
+Install: `go install github.com/therootcompany/golib/cmd/sql-migrate/v2@v2.1.1`
 
-With `_migrations` tracking table:
-- Up begins: `INSERT INTO _migrations (name, id) VALUES (...)`
-- Down ends: `DELETE FROM _migrations WHERE id = '...'`
+This is a **CLI-only** tool (package main — no Go library API). It generates shell scripts; it does not connect to the DB itself. The `_migrations` table in the DB is updated by the migration SQL files themselves.
+
+### Init (once per project)
+
+```sh
+# PostgreSQL (default for prod)
+sql-migrate -d ./db/migrations init --sql-command psql
+
+# SQLite (dev)
+sql-migrate -d ./db/migrations init --sql-command 'sqlite3 "$DB_PATH" < %s'
+```
+
+The init creates:
+- `db/migrations/0001-01-01-001000_init-migrations.up.sql` — config vars + `CREATE TABLE _migrations`
+- `db/migrations/0001-01-01-001000_init-migrations.down.sql`
+- `db/migrations/_migrations.sql` — query used to reload the log
+
+### Create a migration
+
+```sh
+sql-migrate -d ./db/migrations create add-users-table
+```
+
+Generates a dated pair: `2026-03-23-001000_add-users-table.{up,down}.sql`
+
+### Sync log from DB (run before every `up`)
+
+`sql-migrate` tracks applied migrations in a local log file (`db/migrations.log`). Before running `up`, refresh it from the DB:
+
+```sh
+sql-migrate -d ./db/migrations sync | sh
+```
+
+The `|| true` in the generated script is intentional: a fresh DB with no `_migrations` table produces an empty log, meaning all migrations are pending.
+
+### Apply / rollback
+
+```sh
+# Sync then apply all pending migrations
+sql-migrate -d ./db/migrations sync | sh
+sql-migrate -d ./db/migrations up | sh
+
+# Rollback last migration
+sql-migrate -d ./db/migrations down | sh
+```
+
+**Deploy sequence:**
+```sh
+sql-migrate -d ./db/migrations sync | sh
+sql-migrate -d ./db/migrations up | sh
+```
+
+### Naming: `YYYY-MM-DD-NNNNNN_description.up.sql` / `.down.sql`
+
+Each migration file tracks itself in the DB:
+- Up begins: `INSERT INTO _migrations (name, id) VALUES ('2026-03-23-001000_add-users', 'a1b2c3d4');`
+- Down ends: `DELETE FROM _migrations WHERE id = 'a1b2c3d4';`
 - Generate ID: `openssl rand -hex 4`
+
+The migrations log (`db/migrations.log`) is a flat text file on disk — add it to `.gitignore`. It is reloaded from the DB with `_migrations.sql` when needed.
+
+### Go app: no self-migration at startup
+
+With sql-migrate, the Go app does **not** call `db.Exec(schema)` at startup. The DB is migrated by the operator before deploying:
+
+```sh
+sql-migrate -d ./db/migrations up | sh   # part of deploy process
+```
+
+### sqlc schema
+
+Keep `db/schema.sql` as the full current schema for sqlc. Migrations implement it incrementally; `schema.sql` is the truth for type generation. Point sqlc at it:
+
+```yaml
+# sqlc.yaml
+schema: "db/schema.sql"
+```
 
 ## JWT
 
@@ -298,9 +373,29 @@ return errors.Join(errs...)
 
 Prefer real code over mocks. Test actual behavior — real DB queries, real handler logic — not fakes that only verify wiring.
 
+## Build
+
+Use `go generate`, direct `go` commands, and POSIX shell scripts in `scripts/`.
+
+- `go build` / `go run` / `go install` for compiling
+- `go generate ./...` for code generation (sqlc, stringer, embed manifests, etc.)
+- `go tool` (Go 1.24+) for versioned tool dependencies declared in `go.mod`
+- POSIX shell scripts in `scripts/` for anything `go` can't express directly
+  (e.g. cross-compilation with env overrides, scp + remote restart for deploy)
+
+Codegen directives live in the Go source files they affect:
+
+```go
+//go:generate sqlc generate
+//go:generate go tool stringer -type=Status
+```
+
+`make` and `Makefile` are not approved or supported.
+
 ## Pre-commit
 
 ```sh
+go generate ./...
 go fmt ./...
 goimports -w .
 go fix ./...
