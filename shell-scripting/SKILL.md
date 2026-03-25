@@ -49,3 +49,19 @@ curl -sSL "$url" | jq '.' | tee result.json
 
 - **keypairs** — JWT creation/inspection. Stdout = JWT string, stderr = decoded JSON.
   Key goes to `prod.jwk`, tokens to `<email>.jwt`.
+
+## Linting and formatting
+
+Always run both before committing:
+
+```sh
+shellcheck script.sh
+shfmt -i 3 -sr -ci -s -w script.sh
+```
+
+Flags:
+- `-i 3` — 3-space indentation
+- `-sr` — space before redirect operators (`echo foo > bar`)
+- `-ci` — indent `case` statement bodies
+- `-s` — simplify code where possible
+- `-w` — write result back to file (omit to diff only)
