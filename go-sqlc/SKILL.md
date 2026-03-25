@@ -1,5 +1,5 @@
 ---
-name: sqlc-query-design
+name: go-sqlc
 description: sqlc query tooling for Go projects. Use when writing, updating, or debugging SQL queries managed by sqlc — including query design rules, batch variants, parameter syntax, type mappings, and regenerating code after query changes.
 ---
 

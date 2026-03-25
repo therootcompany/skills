@@ -45,6 +45,14 @@ curl -sSL "$url" | jq '.' | tee result.json
 - **Passwords use base58 charset only** — `123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz`.
   No ambiguous chars (0/O, l/1/I), no shell-special chars (+/=), no escaping needed.
 
+## Installing tools
+
+Preference order — stop at the first that works:
+
+1. Follow the installation instructions in the relevant skill
+2. `webi` — e.g. `webi shellcheck`, `webi shfmt`
+3. System package manager (`apt-get`, `brew`, etc.) — last resort only
+
 ## Tools
 
 - **keypairs** — JWT creation/inspection. Stdout = JWT string, stderr = decoded JSON.

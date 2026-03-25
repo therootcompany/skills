@@ -14,6 +14,14 @@ Each skill is a `SKILL.md` in its own directory. Invoke via the `Skill` tool.
 | `write-modern-javascript` | Vanilla JS for browser UIs — no transpiler, no framework |
 
 
+## Installing Tools
+
+Preference order — stop at the first that works:
+
+1. Follow the installation instructions in the relevant skill
+2. `webi` — e.g. `webi go` (then `go install` for Go tools), `webi node@lts` (then `npm install` for Node tools)
+3. System package manager (`apt-get`, `brew`, etc.) — last resort only
+
 ## Session Start Sequence
 
 1. Whenever a `.git` is present but `AGENTS.md` is missing, ask if the `repo-init` skill should be used.
