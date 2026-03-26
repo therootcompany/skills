@@ -5,14 +5,16 @@ description: GitHub repo creation, branch protection, committing, WIP PRs, and m
 
 ## Create a New GitHub Repo
 
+Replace `<org>` with your GitHub organization or username:
+
 ```sh
-gh repo create therootcompany/<name> --public --source . --remote origin --push
+gh repo create <org>/<name> --public --source . --remote origin --push
 ```
 
 After the first push to `main`, apply branch protection:
 
 ```sh
-gh api repos/therootcompany/<name>/branches/main/protection \
+gh api repos/<org>/<name>/branches/main/protection \
   --method PUT \
   --field enforce_admins=true \
   --field required_linear_history=true \
