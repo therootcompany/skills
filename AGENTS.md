@@ -2,17 +2,16 @@
 
 Each skill is a `SKILL.md` in its own directory. Invoke via the `Skill` tool.
 
-| Skill | When to use |
-|-------|-------------|
-| `create-skill` | Creating or updating a SKILL.md |
-| `git-workflow` | GitHub repo creation, branch protection, committing, PRs, merging |
-| `go-develop` | Go HTTP handlers, routes, middleware, migrations, data endpoints, CLI flags |
-| `shell-scripting` | Writing or reviewing POSIX shell scripts |
-| `sqlc-query-design` | Writing, updating, or debugging sqlc-managed SQL queries in Go projects |
-| `strip-ai-tells` | Cleaning up AI-generated text, docs, commit messages, or markdown |
-| `use-modern-go` | Applying modern Go syntax guidelines for a project's Go version |
-| `write-modern-javascript` | Vanilla JS for browser UIs — no transpiler, no framework |
-
+| Skill                     | When to use                                                                 |
+| ------------------------- | --------------------------------------------------------------------------- |
+| `create-skill`            | Creating or updating a SKILL.md                                             |
+| `git-workflow`            | GitHub repo creation, branch protection, committing, PRs, merging           |
+| `go-develop`              | Go HTTP handlers, routes, middleware, migrations, data endpoints, CLI flags |
+| `shell-scripting`         | Writing or reviewing POSIX shell scripts                                    |
+| `sqlc-query-design`       | Writing, updating, or debugging sqlc-managed SQL queries in Go projects     |
+| `strip-ai-tells`          | Cleaning up AI-generated text, docs, commit messages, or markdown           |
+| `use-modern-go`           | Applying modern Go syntax guidelines for a project's Go version             |
+| `write-modern-javascript` | Vanilla JS for browser UIs — no transpiler, no framework                    |
 
 ## Installing Tools
 
@@ -42,6 +41,8 @@ Git-ignored, ephemeral, worktree/environment-specific. Contains what differs bet
 
 **Create it** at session start if missing and you have environment-specific context to record.
 **Never commit it** — add `LOCAL.md` to `.gitignore`.
+
+You should ONLY read the LOCAL.md for your project and branch / worktree. One Agent per LOCAL.md ONLY.
 
 ## AGENTS.md vs LOCAL.md Split
 
