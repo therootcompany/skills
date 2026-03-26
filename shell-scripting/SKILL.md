@@ -5,12 +5,48 @@ description: POSIX shell scripting conventions. Use when writing any shell scrip
 
 ## Basics
 
-- **POSIX sh only.** Use `#!/bin/sh` — never bash. Avoid bashisms: process substitution
-  `<(...)`, arrays, `[[`, `local`, `declare`, etc.
-- **Always `set -eu`.** Every script starts with `set -eu` — exit on error, error on
-  undefined variables.
-- **Use `test` instead of `[ ... ]`.** `test` is the command; `[` is a noisier alias.
-  Write `if test -e file` not `if [ -e file ]`.
+- MUST: POSIX sh only. Use `#!/bin/sh` - never bash. No bashisms: no process
+  substitution `<(...)`, no arrays, no `[[`, no `local`, no `declare`.
+- MUST: Always `set -eu`. Every script starts with `set -eu` - exit on error,
+  error on undefined variables.
+- MUST: Use `test` instead of `[ ... ]`. `test` is the command; `[` is a noisier
+  alias. Write `if test -e file` not `if [ -e file ]`.
+
+## Subshells and error handling
+
+- NEVER: Use command substitution inside strings where `set -e` cannot catch
+  failures. A subshell in a string assignment silently swallows errors:
+
+  ```sh
+  # BAD: if curl fails, b_result is empty, script continues
+  b_result="$(curl -sf "$url")"
+
+  # GOOD: set -e catches the failure because the subshell is the whole command
+  b_result=$(curl -sf "$url")
+  ```
+
+  The rule: `$()` must be the entire value of an assignment (`b_x=$(cmd)`),
+  or used directly as a command argument — never embedded in a quoted string
+  (`b_x="prefix $(cmd)"`) where its exit code is discarded.
+
+- NEVER: Use the `&&`/`||` pattern as a ternary. It is not `if/then/else` —
+  if the `&&` command fails, the `||` command runs too:
+
+  ```sh
+  # BAD: "evil ternary" — if mkdir succeeds but cd fails, rm runs
+  test -d foo && cd foo || rm -rf foo
+
+  # GOOD: explicit if/then/else
+  if test -d foo; then
+      cd foo
+  else
+      rm -rf foo
+  fi
+  ```
+
+  The `cmd || fallback` pattern is fine when `cmd` is a single simple command
+  (like `command -v ... || go install ...`), but chaining `&&` and `||`
+  together creates a false ternary that breaks under `set -e`.
 
 ## Variable naming
 
@@ -23,14 +59,14 @@ description: POSIX shell scripting conventions. Use when writing any shell scrip
 
 ## Function and command naming
 
-- `fn_name` — helper functions (anything other than the main/entry function)
-- `cmd_name` — command aliases, e.g. `cmd_curl='curl --fail-with-body -sSL'`
+- `fn_name` - helper functions (anything other than the main/entry function)
+- `cmd_name` - command aliases, e.g. `cmd_curl='curl --fail-with-body -sSL'`
 
 ## JSON processing
 
-- **Use `jq` for all JSON processing** — never python one-liners.
-- Pipe curl output through `jq | tee file.json` — formats JSON, shows output on screen,
-  and saves to file simultaneously. Prefer over silent `> file.json` redirects.
+- MUST: Use `jq` for all JSON processing - never python one-liners.
+- PREFER: Pipe curl output through `jq | tee file.json` - formats JSON, shows
+  output, and saves to file simultaneously.
 
 ```sh
 curl -sSL "$url" | jq '.' | tee result.json
@@ -38,38 +74,35 @@ curl -sSL "$url" | jq '.' | tee result.json
 
 ## Secrets hygiene
 
-- Write secrets to `*.env` or `*.jwk` / `*.jwt` files covered by `.gitignore`. Never
-  write to `/tmp/` or other world-readable paths.
-- Use separate files per secret type (e.g. `prod.jwk` for signing key, `user.jwt` for
-  minted token).
-- **Passwords use base58 charset only** — `123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz`.
-  No ambiguous chars (0/O, l/1/I), no shell-special chars (+/=), no escaping needed.
+- MUST: Write secrets to `*.env` or `*.jwk` / `*.jwt` files covered by
+  `.gitignore`. NEVER write to `/tmp/` or other world-readable paths.
+- PREFER: Separate files per secret type (e.g. `prod.jwk` for signing key,
+  `user.jwt` for minted token).
+- MUST: Passwords use base58 charset only -
+  `123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz`. No ambiguous
+  chars (0/O, l/1/I), no shell-special chars (+/=), no escaping needed.
 
 ## Installing tools
 
-Preference order — stop at the first that works:
+PREFER: Stop at the first that works:
 
 1. Follow the installation instructions in the relevant skill
-2. `webi` — e.g. `webi shellcheck`, `webi shfmt`
-3. System package manager (`apt-get`, `brew`, etc.) — last resort only
+2. `webi` - e.g. `webi shellcheck`, `webi shfmt`
+3. System package manager (`apt-get`, `brew`, etc.) - last resort only
 
 ## Tools
 
-- **keypairs** — JWT creation/inspection. Stdout = JWT string, stderr = decoded JSON.
-  Key goes to `prod.jwk`, tokens to `<email>.jwt`.
+- **keypairs** - JWT creation/inspection. Stdout = JWT string, stderr = decoded
+  JSON. Key goes to `prod.jwk`, tokens to `<email>.jwt`.
 
 ## Linting and formatting
 
-Always run both before committing:
+MUST: Run both before committing:
 
 ```sh
 shellcheck script.sh
 shfmt -i 3 -sr -ci -s -w script.sh
 ```
 
-Flags:
-- `-i 3` — 3-space indentation
-- `-sr` — space before redirect operators (`echo foo > bar`)
-- `-ci` — indent `case` statement bodies
-- `-s` — simplify code where possible
-- `-w` — write result back to file (omit to diff only)
+Flags: `-i 3` (3-space indent), `-sr` (space before redirects), `-ci` (indent
+case bodies), `-s` (simplify), `-w` (write in-place, omit to diff only).
