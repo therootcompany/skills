@@ -16,7 +16,9 @@ sh ~/Agents/skills/proxmox/scripts/proxmox-sh-doctor
 
 If it fails: read the example env for expected fields
 (`cat ~/.local/opt/proxmox-sh/example.proxmox-sh.env`), help the user fix
-their profile. If no working token exists, stop and explain what they need.
+their profile. Use resources output to fill reasonable defaults (first
+available pool, storage, vnet the token can see).
+If no working token exists, stop and explain what they need.
 
 ### 2. Scan all tokens
 
@@ -28,6 +30,7 @@ Individual profile failures are fine. Output shows each token's pools,
 storages, VMs, SDN zones, node grants.
 
 For a single profile: `sh .../proxmox-sh-resources [--detail] [--env <file>]`
+`--detail` adds node CPU/memory, vnet details, pool member counts, templates.
 
 ### 3. Confirm account
 
@@ -41,7 +44,8 @@ env-switch proxmox-sh <profile-name>
 
 - **Respect token permissions.** Advise when permissions are lacking. Investigate
   before concluding (pool propagation, node vs VM scope). Never bypass.
-  See `references/minimum-permissions.csv` for what each operation requires.
+  MUST read `references/minimum-permissions.csv` on 403 errors, new token
+  setup, or when advising what a token can/cannot do.
 - **Agent runs all scripts.** Only escalate to the user on actual roadblocks.
 - **MUST pass `--os vztmpl/...`** to `proxmox-create` (required in current version).
 - **MUST get explicit permission** before touching `~/.ssh/config`.
@@ -60,7 +64,13 @@ Host *.<DIRECT_IP_DOMAIN>
 
 Ask if they want a friendly CNAME (e.g. `feat-foo.example.com`) pointing to
 the direct-IP domain, or if `tls-10-11-xx-yy.<DIRECT_IP_DOMAIN>` is enough.
-If CNAME, add a host-specific SSH entry too.
+If CNAME, also add a host-specific SSH entry:
+
+```
+Host feat-foo.example.com
+    Hostname tls-10-11-xx-yy.<DIRECT_IP_DOMAIN>
+    ProxyCommand sclient --alpn ssh %h
+```
 
 **proxmox-create** forces tty output -- handle or work around it.
 See `proxmox-create-vm` sub-skill for flags, sizing, VMID/IP scheme.
@@ -84,5 +94,12 @@ VMID `1104209`, IP `10.11.4.209`.
 
 ## proxmox-sh Tools
 
-In `~/.local/opt/proxmox-sh/bin/`: `proxmox-create`, `env-switch`,
-`proxmox-sh-init`, `proxmox-sh-update`, `caddy-add`.
+Installed at `~/.local/opt/proxmox-sh/`, commands in `bin/`:
+
+| Command | Purpose |
+|---------|---------|
+| `proxmox-create` | Create LXC containers |
+| `env-switch` | Switch active environment profile |
+| `proxmox-sh-init` | Initialize config dirs and example env |
+| `proxmox-sh-update` | Git pull latest proxmox-sh |
+| `caddy-add` | Add reverse proxy routes via Caddy API |
