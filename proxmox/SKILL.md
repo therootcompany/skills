@@ -99,6 +99,11 @@ Installed at `~/.local/opt/proxmox-sh/`, tools in `bin/`:
 | `proxmox-sh-update` | Git pull latest proxmox-sh |
 | `caddy-add` | Add reverse proxy routes via Caddy API |
 
+## References
+
+MUST: Read `references/minimum-permissions.csv` when troubleshooting 403 errors,
+setting up new tokens, or advising on what a tenant token can and cannot do.
+
 ## Related Skills
 
 - `paperos-new-instance-provision-vps-proxmox-cloudflare` - PaperOS-specific provisioning workflow (reference)

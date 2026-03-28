@@ -37,7 +37,7 @@ Run guest agent commands,VM.GuestAgent.*,/vms/{vmid},PVEVMAdmin,yes,file read/wr
 HA group management,Sys.Console,/,PVESysAdmin,no,requires root-level grant; no per-pool HA; must ask cluster admin
 Node CPU/memory summary,Sys.Audit,/nodes/{node},PVEAuditor,no,tenant cannot see if host is overcommitted; only per-VM metrics available
 ZFS dataset resize / quota,Sys.Modify,/nodes/{node},,no,no API; requires shell access on PVE node to run zfs set
-Download new OS templates (pveam),Sys.Modify + Datastore.AllocateSpace,/nodes/{node} + /storage/{storage},,no,admin downloads to shared storage; tenant can only list what is available
+Download OS templates (pveam),Datastore.AllocateSpace,/storage/{storage} + /nodes/{node},PVEDatastoreAdmin,partial,tenant can download to own storage; pveam update (catalog refresh) requires Sys.Modify on node
 Scheduled backup jobs (vzdump.cron),Sys.Audit,/,PVEAuditor,no,GET /cluster/backup lists ALL cluster jobs; no per-pool filter
 Firewall rules (datacenter-level),Sys.Modify,/,,no,tenant can set VM-level firewall but not cluster/host rules
 Create additional pools,Pool.Allocate,/pool (root),PVEPoolAdmin,no,pool creation is a root-path operation; tenant gets pre-provisioned pools
