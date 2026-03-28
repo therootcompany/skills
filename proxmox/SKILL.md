@@ -6,6 +6,17 @@ description:
   runs the doctor script and points to focused sub-skills.
 ---
 
+## MUST: Respect Token Permissions
+
+The token's granted permissions are the guardrails. Before any operation, check
+`proxmox-sh-resources --fast` output to confirm the token has the required privileges.
+
+- Advise the user when their token lacks permissions for the requested operation.
+- If a permission denial surprises you, investigate (e.g. node-level vs VM-level
+  scope, pool propagation) before concluding it's missing — but never bypass or
+  ignore what the token cannot do.
+- Reference `references/minimum-permissions.csv` for what each operation requires.
+
 ## MUST: Run Doctor First
 
 MUST: Run `proxmox-sh-doctor` before any Proxmox operation. It validates dependencies,
@@ -26,10 +37,11 @@ sh ~/Agents/skills/proxmox/scripts/proxmox-sh-resources          # full: 8+ API 
 sh ~/Agents/skills/proxmox/scripts/proxmox-sh-resources --fast   # fast: 3 API calls
 ```
 
-Use `--fast` for quick orientation. It pulls pools, storages, SDN zones, and
-node grants from `/access/permissions` in a single call, then one call for
-VM names/status. Full mode adds node CPU/memory metrics, vnet details, pool
-member counts, and template listing.
+Use `--fast` for quick orientation (3 API calls vs 8+). It pulls pools,
+storages, SDN zones, and node grants from `/access/permissions` in a single
+call, then one call for VM names/status. Use this to inspect what each token
+can see. Full mode adds node CPU/memory metrics, vnet details, pool member
+counts, and template listing.
 
 ## Sub-skills
 
