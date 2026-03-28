@@ -4,14 +4,19 @@ set -u
 
 # proxmox-sh-resources: list Proxmox infrastructure for agent use
 #
-# Lists pools, storages, VMs/LXCs, SDN zones/vnets, nodes, and templates.
+# Lists pools, storages, VMs/LXCs, SDN zones, nodes, and templates.
 # Run proxmox-sh-doctor first to validate the environment.
+#
+# Usage:
+#   proxmox-sh-resources          # full mode: 6+ API calls, detailed output
+#   proxmox-sh-resources --fast   # fast mode: 2 API calls (permissions + VMs)
 #
 # Exit codes:
 #   0 - listing completed
 #   1 - cannot connect or missing env
 
 g_exit_code=0
+g_fast=false
 
 fn_log_ok() {
 	printf '  [OK] %s\n' "$1"
@@ -62,13 +67,163 @@ fn_init() {
 	fi
 
 	b_pve_version="$(echo "${b_version}" | jq -r '.data.version // "unknown"')"
-	echo "proxmox-sh-resources"
+	b_mode="full"
+	if test "${g_fast}" = "true"; then
+		b_mode="fast (2 API calls)"
+	fi
+	echo "proxmox-sh-resources (${b_mode})"
 	echo "===================="
 	echo ""
 	echo "  Profile: $(basename "$(readlink ~/.config/proxmox-sh/current.env)")"
 	echo "  Host: ${PROXMOX_HOST}"
 	echo "  PVE: ${b_pve_version}"
 }
+
+# ========================================
+# Fast mode: /access/permissions + /cluster/resources?type=vm
+# ========================================
+fn_fast() {
+	# Single call gets all accessible paths
+	if ! g_perms="$(${g_curl} -H "${g_auth}" "${g_base_url}/access/permissions" 2>&1)"; then
+		fn_log_err "cannot query permissions"
+		return 1
+	fi
+
+	# Extract granted paths grouped by prefix
+	g_granted="$(echo "${g_perms}" | jq '
+		[.data | to_entries[]
+			| select(.value | to_entries | map(select(.value == 1)) | length > 0)
+			| {
+				path: .key,
+				perms: [.value | to_entries[] | select(.value == 1) | .key] | sort
+			}
+		] | sort_by(.path)
+	')"
+
+	fn_fast_pools
+	fn_fast_storages
+	fn_fast_vms
+	fn_fast_sdn
+	fn_fast_nodes
+}
+
+fn_fast_pools() {
+	fn_log_section "Pools"
+
+	b_pools="$(echo "${g_granted}" | jq -r '[.[] | select(.path | startswith("/pool/"))] | sort_by(.path)')"
+	b_count="$(echo "${b_pools}" | jq 'length')"
+
+	if test "${b_count}" -eq 0; then
+		echo "    (none visible)"
+		return
+	fi
+
+	echo "${b_pools}" | jq -r '.[] | "    - \(.path | ltrimstr("/pool/"))  \(.perms | join(", "))"'
+
+	# Conventions
+	echo ""
+	echo "  Conventions:"
+	b_found_convention=false
+	for b_suffix in active dev prod offline; do
+		b_matches="$(echo "${b_pools}" | jq -r --arg s "-${b_suffix}" '[.[] | select(.path | endswith($s))] | length')"
+		if test "${b_matches}" -gt 0; then
+			b_found_convention=true
+			printf '    *-%s: %s pool(s)\n' "${b_suffix}" "${b_matches}"
+		fi
+	done
+	if test "${b_found_convention}" = "false"; then
+		echo "    (no standard -active/-dev/-prod/-offline patterns detected)"
+	fi
+}
+
+fn_fast_storages() {
+	fn_log_section "Storages"
+
+	b_storages="$(echo "${g_granted}" | jq -r '[.[] | select(.path | startswith("/storage/"))] | sort_by(.path)')"
+	b_count="$(echo "${b_storages}" | jq 'length')"
+
+	if test "${b_count}" -eq 0; then
+		echo "    (none visible)"
+		return
+	fi
+
+	echo "${b_storages}" | jq -r '.[] | "    - \(.path | ltrimstr("/storage/"))  \(.perms | join(", "))"'
+}
+
+fn_fast_vms() {
+	fn_log_section "VMs/LXCs"
+
+	# /access/permissions lists /vms/{vmid} paths but grants may come from pool
+	# propagation (showing 0 on individual paths). Always make one call to get
+	# actual VM list with names and status.
+	if ! b_resources="$(${g_curl} -H "${g_auth}" "${g_base_url}/cluster/resources?type=vm" 2>&1)"; then
+		# Fall back to VMID list from permissions (even denied paths indicate visibility)
+		fn_log_warn "cannot fetch VM details"
+		b_all_vmids="$(echo "${g_perms}" | jq -r '[.data | to_entries[] | select(.key | startswith("/vms/")) | .key | ltrimstr("/vms/")] | sort')"
+		b_fallback_count="$(echo "${b_all_vmids}" | jq 'length')"
+		if test "${b_fallback_count}" -gt 0; then
+			echo "    ${b_fallback_count} VMIDs visible (no details):"
+			echo "${b_all_vmids}" | jq -r '.[] | "    \(.)"'
+		else
+			echo "    (none visible)"
+		fi
+		return
+	fi
+
+	b_count="$(echo "${b_resources}" | jq '.data | length')"
+	if test "${b_count}" -eq 0; then
+		echo "    (none visible)"
+		return
+	fi
+
+	echo "    Total: ${b_count}"
+	echo ""
+
+	b_running="$(echo "${b_resources}" | jq '[.data[] | select(.status == "running")] | length')"
+	b_stopped="$(echo "${b_resources}" | jq '[.data[] | select(.status == "stopped")] | length')"
+	printf '    Running: %s, Stopped: %s\n' "${b_running}" "${b_stopped}"
+	echo ""
+
+	echo "${b_resources}" | jq -r '
+		.data
+		| sort_by(.vmid)
+		| .[]
+		| "    \(.vmid)\t\(.name // "unnamed")\t\(.status)\t\(.node)\tpool=\(.pool // "none")"
+	'
+}
+
+fn_fast_sdn() {
+	fn_log_section "SDN"
+
+	b_zones="$(echo "${g_granted}" | jq -r '[.[] | select(.path | startswith("/sdn/zones/"))] | sort_by(.path)')"
+	b_count="$(echo "${b_zones}" | jq 'length')"
+
+	echo "  Zones:"
+	if test "${b_count}" -eq 0; then
+		echo "    (none visible)"
+	else
+		echo "${b_zones}" | jq -r '.[] | "    - \(.path | ltrimstr("/sdn/zones/"))  \(.perms | join(", "))"'
+	fi
+}
+
+fn_fast_nodes() {
+	fn_log_section "Nodes"
+
+	b_nodes="$(echo "${g_granted}" | jq -r '[.[] | select(.path | startswith("/nodes"))] | sort_by(.path)')"
+	b_count="$(echo "${b_nodes}" | jq 'length')"
+
+	if test "${b_count}" -eq 0; then
+		echo "    (no node-level grants)"
+	else
+		echo "${b_nodes}" | jq -r '.[] | "    - \(.path)  \(.perms | join(", "))"'
+	fi
+	echo ""
+	echo "  (run without --fast for node CPU/memory metrics)"
+}
+
+# ========================================
+# Full mode: individual API calls
+# ========================================
 
 # ----------------------------------------
 # Pools
@@ -152,11 +307,11 @@ fn_list_resources() {
 	echo ""
 
 	echo "${b_resources}" | jq -r '
-        .data
-        | sort_by(.vmid)
-        | .[]
-        | "    \(.vmid)\t\(.name // "unnamed")\t\(.status)\t\(.node)\tpool=\(.pool // "none")"
-    '
+		.data
+		| sort_by(.vmid)
+		| .[]
+		| "    \(.vmid)\t\(.name // "unnamed")\t\(.status)\t\(.node)\tpool=\(.pool // "none")"
+	'
 }
 
 # ----------------------------------------
@@ -205,11 +360,11 @@ fn_list_nodes() {
 	fi
 
 	echo "${b_nodes}" | jq -r '
-        .data
-        | sort_by(.node)
-        | .[]
-        | "    - \(.node) (\(.status)) cpu=\(.cpu // 0 | . * 100 | floor)% mem=\((.mem // 0) / 1073741824 | . * 10 | floor / 10)G/\((.maxmem // 0) / 1073741824 | . * 10 | floor / 10)G"
-    '
+		.data
+		| sort_by(.node)
+		| .[]
+		| "    - \(.node) (\(.status)) cpu=\(.cpu // 0 | . * 100 | floor)% mem=\((.mem // 0) / 1073741824 | . * 10 | floor / 10)G/\((.maxmem // 0) / 1073741824 | . * 10 | floor / 10)G"
+	'
 }
 
 # ----------------------------------------
@@ -237,17 +392,17 @@ fn_list_templates() {
 	fi
 
 	echo "${b_content}" | jq -r '
-        .data
-        | sort_by(.volid)
-        | .[]
-        | "    - \(.volid) (\(.size // 0 | . / 1048576 | floor)MB)"
-    '
+		.data
+		| sort_by(.volid)
+		| .[]
+		| "    - \(.volid) (\(.size // 0 | . / 1048576 | floor)MB)"
+	'
 
 	# Check if default template exists
 	if test -n "${PROXMOX_TEMPLATE_DEFAULT:-}"; then
 		b_default_match="$(echo "${b_content}" | jq -r --arg t "${PROXMOX_TEMPLATE_DEFAULT}" '
-            .data[] | select(.volid | endswith($t)) | .volid
-        ')"
+			.data[] | select(.volid | endswith($t)) | .volid
+		')"
 		if test -n "${b_default_match}"; then
 			fn_log_ok "default template '${PROXMOX_TEMPLATE_DEFAULT}' found"
 		else
@@ -260,14 +415,38 @@ fn_list_templates() {
 # Main
 # ----------------------------------------
 main() {
+	# Parse flags
+	while test -n "${1:-}"; do
+		case "${1}" in
+		--fast | -f)
+			g_fast=true
+			;;
+		--help | -h)
+			echo "Usage: proxmox-sh-resources [--fast]"
+			echo ""
+			echo "  --fast, -f   Use /access/permissions (2 API calls instead of 6+)"
+			return 0
+			;;
+		*)
+			echo "Unknown flag: ${1}" >&2
+			return 1
+			;;
+		esac
+		shift
+	done
+
 	fn_init || return 1
 
-	fn_list_pools
-	fn_list_storages
-	fn_list_resources
-	fn_list_sdn
-	fn_list_nodes
-	fn_list_templates
+	if test "${g_fast}" = "true"; then
+		fn_fast
+	else
+		fn_list_pools
+		fn_list_storages
+		fn_list_resources
+		fn_list_sdn
+		fn_list_nodes
+		fn_list_templates
+	fi
 
 	echo ""
 
