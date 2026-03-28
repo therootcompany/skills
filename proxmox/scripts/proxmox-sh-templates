@@ -69,45 +69,63 @@ main() {
 	fi
 
 	b_node="${PROXMOX_TARGET_NODE:-pve1}"
-	b_tmpl_storage="${PROXMOX_TEMPLATE_STORAGE:-}"
-
-	if test -z "${b_tmpl_storage}"; then
-		echo "ERROR: PROXMOX_TEMPLATE_STORAGE not set" >&2
-		return 1
-	fi
+	b_default="${PROXMOX_TEMPLATE_DEFAULT:-}"
 
 	b_auth="Authorization: PVEAPIToken=${PROXMOX_TOKEN_ID}=${PROXMOX_TOKEN_SECRET}"
 	b_base_url="https://${PROXMOX_HOST}/api2/json"
 	b_curl="curl --max-time 10 --fail-with-body -sSL"
 
-	if ! b_content="$(${b_curl} -H "${b_auth}" \
-		"${b_base_url}/nodes/${b_node}/storage/${b_tmpl_storage}/content?content=vztmpl" 2>&1)"; then
-		echo "ERROR: cannot list templates from ${b_tmpl_storage}" >&2
+	# Find all storages that support vztmpl content
+	if ! b_storages="$(${b_curl} -H "${b_auth}" \
+		"${b_base_url}/nodes/${b_node}/storage" 2>&1)"; then
+		echo "ERROR: cannot list storages" >&2
 		return 1
 	fi
 
-	b_default="${PROXMOX_TEMPLATE_DEFAULT:-}"
+	b_tmpl_storages="$(echo "${b_storages}" | jq -r '
+		.data[] | select(.content // "" | split(",") | any(. == "vztmpl"))
+		| .storage
+	' | sort)"
+
+	if test -z "${b_tmpl_storages}"; then
+		echo "ERROR: no storages with vztmpl content" >&2
+		return 1
+	fi
 
 	echo "# templates"
-	printf 'storage\t%s\n' "${b_tmpl_storage}"
 	printf 'node\t%s\n' "${b_node}"
 	if test -n "${b_default}"; then
 		printf 'default\t%s\n' "${b_default}"
 	fi
 
-	# Extract volids sorted by name, annotate each
-	b_volids="$(echo "${b_content}" | jq -r '.data[].volid' | sort)"
+	# Collect volids from all accessible storages
+	b_all_volids=""
+	for b_stor in ${b_tmpl_storages}; do
+		b_content="$(${b_curl} -H "${b_auth}" \
+			"${b_base_url}/nodes/${b_node}/storage/${b_stor}/content?content=vztmpl" 2>/dev/null)" || continue
+		b_volids="$(echo "${b_content}" | jq -r '.data[].volid' 2>/dev/null)" || continue
+		if test -n "${b_volids}"; then
+			if test -n "${b_all_volids}"; then
+				b_all_volids="$(printf '%s\n%s' "${b_all_volids}" "${b_volids}")"
+			else
+				b_all_volids="${b_volids}"
+			fi
+		fi
+	done
 
-	if test -z "${b_volids}"; then
+	if test -z "${b_all_volids}"; then
 		echo "# (none)"
 		return
 	fi
+
+	# Deduplicate by template name (prefer configured storage), sort
+	b_all_volids="$(echo "${b_all_volids}" | sort -t: -k2 -u)"
 
 	echo ""
 	printf '# n\ttemplate\tinit\tvariant\n'
 
 	b_n=0
-	echo "${b_volids}" | while read -r b_volid; do
+	echo "${b_all_volids}" | while read -r b_volid; do
 		b_n=$((b_n + 1))
 
 		# Strip storage prefix for display
@@ -118,7 +136,8 @@ main() {
 		case "${b_tmpl}" in
 		*ubuntu* | *debian*) b_init="systemd" ;;
 		*alpine*) b_init="openrc" ;;
-		*centos* | *rocky* | *fedora*) b_init="systemd" ;;
+		*centos* | *rocky* | *fedora* | *almalinux*) b_init="systemd" ;;
+		*devuan*) b_init="sysvinit" ;;
 		esac
 
 		# Detect variant
