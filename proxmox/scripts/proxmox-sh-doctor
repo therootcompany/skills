@@ -177,6 +177,13 @@ fn_check_env() {
 		if test -n "${PROXMOX_TOKEN_ID:-}" && test -n "${PROXMOX_TOKEN_SECRET:-}"; then
 			echo "OK: credentials set"
 		fi
+
+		# Direct-IP domain
+		if test -z "${DIRECT_IP_DOMAIN:-}"; then
+			echo "ERROR: DIRECT_IP_DOMAIN not set" >&2
+		else
+			echo "OK: DIRECT_IP_DOMAIN=${DIRECT_IP_DOMAIN}"
+		fi
 	)
 }
 

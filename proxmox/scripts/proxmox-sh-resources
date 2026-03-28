@@ -17,6 +17,7 @@ set -u
 
 g_exit_code=0
 g_detail=false
+g_env_file=""
 
 fn_ok() {
 	printf 'OK: %s\n' "$1"
@@ -35,13 +36,21 @@ fn_err() {
 # Load env and connect
 # ----------------------------------------
 fn_init() {
-	if ! test -e ~/.config/proxmox-sh/current.env; then
-		fn_err "no current.env - run proxmox-sh-doctor first"
-		return 1
+	if test -n "${g_env_file}"; then
+		if ! test -e "${g_env_file}"; then
+			fn_err "env file not found: ${g_env_file}"
+			return 1
+		fi
+	else
+		if ! test -e ~/.config/proxmox-sh/current.env; then
+			fn_err "no current.env - run proxmox-sh-doctor first"
+			return 1
+		fi
+		g_env_file=~/.config/proxmox-sh/current.env
 	fi
 
 	# shellcheck disable=SC1090
-	. ~/.config/proxmox-sh/current.env || true
+	. "${g_env_file}" || true
 
 	if test -z "${PROXMOX_HOST:-}" ||
 		test -z "${PROXMOX_TOKEN_ID:-}" ||
@@ -67,8 +76,7 @@ fn_init() {
 	if test "${g_detail}" = "true"; then
 		b_mode="detail"
 	fi
-	# shellcheck disable=SC2012
-	b_profile="$(ls -l ~/.config/proxmox-sh/current.env | sed 's;.*/;;')"
+	b_profile="$(basename "${g_env_file}")"
 	printf 'mode\t%s\n' "${b_mode}"
 	printf 'profile\t%s\n' "${b_profile}"
 	printf 'host\t%s\n' "${PROXMOX_HOST}"
@@ -340,9 +348,6 @@ fn_list_templates() {
 	echo ""
 	echo "# templates"
 
-	# shellcheck disable=SC1090
-	. ~/.config/proxmox-sh/current.env || true
-
 	b_node="${PROXMOX_TARGET_NODE:-pve1}"
 	b_tmpl_storage="${PROXMOX_TEMPLATE_STORAGE:-}"
 
@@ -384,11 +389,12 @@ fn_list_templates() {
 # Main
 # ----------------------------------------
 fn_usage() {
-	echo "Usage: proxmox-sh-resources [--detail]"
+	echo "Usage: proxmox-sh-resources [--detail] [--env <file>]"
 	echo ""
 	echo "List Proxmox infrastructure: pools, storages, VMs, SDN, nodes."
 	echo ""
-	echo "  --detail   8+ API calls: node metrics, vnet details, pool members, templates"
+	echo "  --detail       8+ API calls: node metrics, vnet details, pool members, templates"
+	echo "  --env <file>   source this env file instead of current.env"
 }
 
 main() {
@@ -396,6 +402,16 @@ main() {
 		case "${1}" in
 		--detail)
 			g_detail=true
+			;;
+		--env)
+			shift
+			g_env_file="${1:-}"
+			if test -z "${g_env_file}"; then
+				echo "ERROR: --env requires a file path" >&2
+				echo ""
+				fn_usage >&2
+				return 1
+			fi
 			;;
 		--help | -help | help)
 			fn_usage
