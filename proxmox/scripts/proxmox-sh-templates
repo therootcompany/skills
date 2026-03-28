@@ -1,0 +1,140 @@
+#!/bin/sh
+set -e
+set -u
+
+# proxmox-sh-templates: list available OS templates for agent selection
+#
+# Output: numbered list of vztmpl/ paths with init system and variant tags.
+# Designed for the agent to present to the user as a pick list.
+#
+# Usage:
+#   proxmox-sh-templates                    # uses current.env
+#   proxmox-sh-templates --env <file>       # uses specific env
+#
+# Exit codes:
+#   0 - templates listed
+#   1 - cannot connect or missing env
+
+g_env_file=""
+
+fn_usage() {
+	echo "Usage: proxmox-sh-templates [--env <file>]"
+	echo ""
+	echo "List available OS templates with init system and variant tags."
+}
+
+main() {
+	while test -n "${1:-}"; do
+		case "${1}" in
+		--env)
+			shift
+			g_env_file="${1:-}"
+			if test -z "${g_env_file}"; then
+				echo "ERROR: --env requires a file path" >&2
+				echo ""
+				fn_usage >&2
+				return 1
+			fi
+			;;
+		--help | -help | help)
+			fn_usage
+			return 0
+			;;
+		*)
+			echo "Unknown argument: ${1}" >&2
+			echo ""
+			fn_usage >&2
+			return 1
+			;;
+		esac
+		shift
+	done
+
+	if test -z "${g_env_file}"; then
+		if ! test -e ~/.config/proxmox-sh/current.env; then
+			echo "ERROR: no current.env and no --env flag" >&2
+			return 1
+		fi
+		g_env_file=~/.config/proxmox-sh/current.env
+	fi
+
+	# shellcheck disable=SC1090
+	. "${g_env_file}" || true
+
+	if test -z "${PROXMOX_HOST:-}" ||
+		test -z "${PROXMOX_TOKEN_ID:-}" ||
+		test -z "${PROXMOX_TOKEN_SECRET:-}"; then
+		echo "ERROR: missing HOST/TOKEN vars" >&2
+		return 1
+	fi
+
+	b_node="${PROXMOX_TARGET_NODE:-pve1}"
+	b_tmpl_storage="${PROXMOX_TEMPLATE_STORAGE:-}"
+
+	if test -z "${b_tmpl_storage}"; then
+		echo "ERROR: PROXMOX_TEMPLATE_STORAGE not set" >&2
+		return 1
+	fi
+
+	b_auth="Authorization: PVEAPIToken=${PROXMOX_TOKEN_ID}=${PROXMOX_TOKEN_SECRET}"
+	b_base_url="https://${PROXMOX_HOST}/api2/json"
+	b_curl="curl --max-time 10 --fail-with-body -sSL"
+
+	if ! b_content="$(${b_curl} -H "${b_auth}" \
+		"${b_base_url}/nodes/${b_node}/storage/${b_tmpl_storage}/content?content=vztmpl" 2>&1)"; then
+		echo "ERROR: cannot list templates from ${b_tmpl_storage}" >&2
+		return 1
+	fi
+
+	b_default="${PROXMOX_TEMPLATE_DEFAULT:-}"
+
+	echo "# templates"
+	printf 'storage\t%s\n' "${b_tmpl_storage}"
+	printf 'node\t%s\n' "${b_node}"
+	if test -n "${b_default}"; then
+		printf 'default\t%s\n' "${b_default}"
+	fi
+
+	# Extract volids sorted by name, annotate each
+	b_volids="$(echo "${b_content}" | jq -r '.data[].volid' | sort)"
+
+	if test -z "${b_volids}"; then
+		echo "# (none)"
+		return
+	fi
+
+	echo ""
+	printf '# n\ttemplate\tinit\tvariant\n'
+
+	b_n=0
+	echo "${b_volids}" | while read -r b_volid; do
+		b_n=$((b_n + 1))
+
+		# Strip storage prefix for display
+		b_tmpl="$(echo "${b_volid}" | sed 's;^[^:]*:;;')"
+
+		# Detect init system
+		b_init="unknown"
+		case "${b_tmpl}" in
+		*ubuntu* | *debian*) b_init="systemd" ;;
+		*alpine*) b_init="openrc" ;;
+		*centos* | *rocky* | *fedora*) b_init="systemd" ;;
+		esac
+
+		# Detect variant
+		b_variant="standard"
+		case "${b_tmpl}" in
+		*bnna*) b_variant="bnna" ;;
+		*paperos*) b_variant="custom" ;;
+		esac
+
+		# Mark default
+		if test -n "${b_default}" && echo "${b_volid}" | grep -qF "${b_default}"; then
+			b_variant="${b_variant},default"
+		fi
+
+		printf '%s\t%s\t%s\t%s\n' "${b_n}" "${b_tmpl}" "${b_init}" "${b_variant}"
+	done
+}
+
+main "$@"

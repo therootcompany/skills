@@ -16,14 +16,16 @@ grep -E 'PROXMOX_TEMPLATE_DEFAULT|PROXMOX_TARGET_NODE|PROXMOX_ID_PREFIX' \
 
 ### Step 2: Choose the OS template
 
-Default is `PROXMOX_TEMPLATE_DEFAULT` from the env. Override when the workload
-needs a different OS:
+```sh
+sh ~/Agents/skills/proxmox/scripts/proxmox-sh-templates
+```
+
+Present the numbered list to the user. Guide the choice:
 
 - **systemd required** (most services) => Ubuntu
 - **OpenRC / minimal** (static sites, simple daemons) => Alpine
-- Prefer: user's own template > `bnna` variant > distro standard
-
-To see available templates, run `proxmox-sh-resources --detail` (templates section).
+- Prefer: `custom` > `bnna` variant > `standard`
+- The `default` tag marks the env's `PROXMOX_TEMPLATE_DEFAULT`
 
 ### Step 3: Run the command
 

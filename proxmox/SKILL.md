@@ -46,11 +46,12 @@ For a single profile: `sh .../proxmox-sh-resources [--detail] [--env <file>]`
 
 ### 3. Confirm account
 
-Ask which profile to use. Skip if the user already stated a preference.
-
 ```sh
-env-switch proxmox-sh <profile-name>
+sh ~/Agents/skills/proxmox/scripts/proxmox-sh-profiles
 ```
+
+Present the numbered list. Skip if the user already stated a preference.
+Switch with `env-switch proxmox-sh <profile-name>` if needed.
 
 ## Rules
 
