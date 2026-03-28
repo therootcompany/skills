@@ -1,0 +1,277 @@
+#!/bin/sh
+set -e
+set -u
+
+# proxmox-sh-resources: list Proxmox infrastructure for agent use
+#
+# Lists pools, storages, VMs/LXCs, SDN zones/vnets, nodes, and templates.
+# Run proxmox-sh-doctor first to validate the environment.
+#
+# Exit codes:
+#   0 - listing completed
+#   1 - cannot connect or missing env
+
+g_exit_code=0
+
+fn_log_ok() {
+	printf '  [OK] %s\n' "$1"
+}
+
+fn_log_warn() {
+	printf '  [WARN] %s\n' "$1" >&2
+}
+
+fn_log_err() {
+	printf '  [ERROR] %s\n' "$1" >&2
+	g_exit_code=1
+}
+
+fn_log_section() {
+	echo ""
+	echo "=== $1 ==="
+}
+
+# ----------------------------------------
+# Load env and connect
+# ----------------------------------------
+fn_init() {
+	if ! test -e ~/.config/proxmox-sh/current.env; then
+		fn_log_err "no current.env - run proxmox-sh-doctor first"
+		return 1
+	fi
+
+	# shellcheck disable=SC1090
+	. ~/.config/proxmox-sh/current.env || true
+
+	if test -z "${PROXMOX_HOST:-}" ||
+		test -z "${PROXMOX_TOKEN_ID:-}" ||
+		test -z "${PROXMOX_TOKEN_SECRET:-}"; then
+		fn_log_err "missing HOST/TOKEN vars - run proxmox-sh-doctor first"
+		return 1
+	fi
+
+	g_auth="Authorization: PVEAPIToken=${PROXMOX_TOKEN_ID}=${PROXMOX_TOKEN_SECRET}"
+	g_base_url="https://${PROXMOX_HOST}/api2/json"
+	g_curl="curl --max-time 10 --fail-with-body -sSL"
+
+	# Verify connectivity
+	if ! b_version="$(${g_curl} -H "${g_auth}" "${g_base_url}/version" 2>&1)"; then
+		fn_log_err "cannot reach Proxmox API at ${PROXMOX_HOST}"
+		echo "  Response: ${b_version}" >&2
+		return 1
+	fi
+
+	b_pve_version="$(echo "${b_version}" | jq -r '.data.version // "unknown"')"
+	echo "proxmox-sh-resources"
+	echo "===================="
+	echo ""
+	echo "  Profile: $(basename "$(readlink ~/.config/proxmox-sh/current.env)")"
+	echo "  Host: ${PROXMOX_HOST}"
+	echo "  PVE: ${b_pve_version}"
+}
+
+# ----------------------------------------
+# Pools
+# ----------------------------------------
+fn_list_pools() {
+	fn_log_section "Pools"
+
+	if ! b_pools="$(${g_curl} -H "${g_auth}" "${g_base_url}/pools" 2>&1)"; then
+		fn_log_warn "cannot list pools (may need Sys.Audit permission)"
+		return
+	fi
+
+	b_pool_list="$(echo "${b_pools}" | jq -r '.data[].poolid' | sort)"
+	if test -z "${b_pool_list}"; then
+		echo "    (none visible)"
+		return
+	fi
+
+	echo "${b_pool_list}" | while read -r b_pool; do
+		b_member_count="$(
+			echo "${b_pools}" |
+				jq -r --arg p "${b_pool}" '.data[] | select(.poolid == $p) | (.members // []) | length'
+		)"
+		printf '    - %s (%s members)\n' "${b_pool}" "${b_member_count}"
+	done
+
+	# Pool naming conventions
+	echo ""
+	echo "  Conventions:"
+	b_found_convention=false
+	for b_suffix in active dev prod offline; do
+		b_matches="$(echo "${b_pool_list}" | grep -c "\-${b_suffix}$" || true)"
+		if test "${b_matches}" -gt 0; then
+			b_found_convention=true
+			printf '    *-%s: %s pool(s)\n' "${b_suffix}" "${b_matches}"
+		fi
+	done
+	if test "${b_found_convention}" = "false"; then
+		echo "    (no standard -active/-dev/-prod/-offline patterns detected)"
+	fi
+}
+
+# ----------------------------------------
+# Storages
+# ----------------------------------------
+fn_list_storages() {
+	fn_log_section "Storages"
+
+	if ! b_storages="$(${g_curl} -H "${g_auth}" "${g_base_url}/storage" 2>&1)"; then
+		fn_log_warn "cannot list storages"
+		return
+	fi
+
+	echo "${b_storages}" | jq -r '.data[] | "    - \(.storage) (\(.type)) content=\(.content // "n/a")"' | sort
+}
+
+# ----------------------------------------
+# VMs/LXCs
+# ----------------------------------------
+fn_list_resources() {
+	fn_log_section "VMs/LXCs"
+
+	if ! b_resources="$(${g_curl} -H "${g_auth}" "${g_base_url}/cluster/resources?type=vm" 2>&1)"; then
+		fn_log_warn "cannot list cluster resources"
+		return
+	fi
+
+	b_count="$(echo "${b_resources}" | jq '.data | length')"
+	if test "${b_count}" -eq 0; then
+		echo "    (none visible)"
+		return
+	fi
+
+	echo "    Total: ${b_count}"
+	echo ""
+
+	# Group by status
+	b_running="$(echo "${b_resources}" | jq '[.data[] | select(.status == "running")] | length')"
+	b_stopped="$(echo "${b_resources}" | jq '[.data[] | select(.status == "stopped")] | length')"
+	printf '    Running: %s, Stopped: %s\n' "${b_running}" "${b_stopped}"
+	echo ""
+
+	echo "${b_resources}" | jq -r '
+        .data
+        | sort_by(.vmid)
+        | .[]
+        | "    \(.vmid)\t\(.name // "unnamed")\t\(.status)\t\(.node)\tpool=\(.pool // "none")"
+    '
+}
+
+# ----------------------------------------
+# SDN zones and vnets
+# ----------------------------------------
+fn_list_sdn() {
+	fn_log_section "SDN"
+
+	echo "  Zones:"
+	if ! b_zones="$(${g_curl} -H "${g_auth}" "${g_base_url}/cluster/sdn/zones" 2>&1)"; then
+		fn_log_warn "cannot list SDN zones (SDN may not be configured)"
+		return
+	fi
+
+	b_zone_count="$(echo "${b_zones}" | jq '.data | length')"
+	if test "${b_zone_count}" -eq 0; then
+		echo "    (none configured)"
+	else
+		echo "${b_zones}" | jq -r '.data[] | "    - \(.zone) (\(.type))"' | sort
+	fi
+
+	echo ""
+	echo "  VNets:"
+	if ! b_vnets="$(${g_curl} -H "${g_auth}" "${g_base_url}/cluster/sdn/vnets" 2>&1)"; then
+		fn_log_warn "cannot list SDN vnets"
+		return
+	fi
+
+	b_vnet_count="$(echo "${b_vnets}" | jq '.data | length')"
+	if test "${b_vnet_count}" -eq 0; then
+		echo "    (none configured)"
+	else
+		echo "${b_vnets}" | jq -r '.data[] | "    - \(.vnet) zone=\(.zone) tag=\(.tag // "none")"' | sort
+	fi
+}
+
+# ----------------------------------------
+# Nodes
+# ----------------------------------------
+fn_list_nodes() {
+	fn_log_section "Nodes"
+
+	if ! b_nodes="$(${g_curl} -H "${g_auth}" "${g_base_url}/nodes" 2>&1)"; then
+		fn_log_warn "cannot list nodes"
+		return
+	fi
+
+	echo "${b_nodes}" | jq -r '
+        .data
+        | sort_by(.node)
+        | .[]
+        | "    - \(.node) (\(.status)) cpu=\(.cpu // 0 | . * 100 | floor)% mem=\((.mem // 0) / 1073741824 | . * 10 | floor / 10)G/\((.maxmem // 0) / 1073741824 | . * 10 | floor / 10)G"
+    '
+}
+
+# ----------------------------------------
+# Templates
+# ----------------------------------------
+fn_list_templates() {
+	fn_log_section "Templates"
+
+	# shellcheck disable=SC1090
+	. ~/.config/proxmox-sh/current.env || true
+
+	b_node="${PROXMOX_TARGET_NODE:-pve1}"
+	b_tmpl_storage="${PROXMOX_TEMPLATE_STORAGE:-}"
+
+	if test -z "${b_tmpl_storage}"; then
+		fn_log_warn "PROXMOX_TEMPLATE_STORAGE not set - cannot list templates"
+		return
+	fi
+
+	echo "  Available templates (${b_tmpl_storage} on ${b_node}):"
+	if ! b_content="$(${g_curl} -H "${g_auth}" \
+		"${g_base_url}/nodes/${b_node}/storage/${b_tmpl_storage}/content?content=vztmpl" 2>&1)"; then
+		fn_log_warn "cannot list templates from ${b_tmpl_storage} on ${b_node}"
+		return
+	fi
+
+	echo "${b_content}" | jq -r '
+        .data
+        | sort_by(.volid)
+        | .[]
+        | "    - \(.volid) (\(.size // 0 | . / 1048576 | floor)MB)"
+    '
+
+	# Check if default template exists
+	if test -n "${PROXMOX_TEMPLATE_DEFAULT:-}"; then
+		b_default_match="$(echo "${b_content}" | jq -r --arg t "${PROXMOX_TEMPLATE_DEFAULT}" '
+            .data[] | select(.volid | endswith($t)) | .volid
+        ')"
+		if test -n "${b_default_match}"; then
+			fn_log_ok "default template '${PROXMOX_TEMPLATE_DEFAULT}' found"
+		else
+			fn_log_warn "default template '${PROXMOX_TEMPLATE_DEFAULT}' NOT found in ${b_tmpl_storage}"
+		fi
+	fi
+}
+
+# ----------------------------------------
+# Main
+# ----------------------------------------
+main() {
+	fn_init || return 1
+
+	fn_list_pools
+	fn_list_storages
+	fn_list_resources
+	fn_list_sdn
+	fn_list_nodes
+	fn_list_templates
+
+	echo ""
+
+	return "${g_exit_code}"
+}
+
+main "$@"

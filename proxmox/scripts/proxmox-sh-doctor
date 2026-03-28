@@ -4,8 +4,8 @@ set -u
 
 # proxmox-sh-doctor: validate proxmox-sh environment for agent use
 #
-# Checks dependencies, env file health, and API connectivity.
-# Outputs structured diagnostics that agents can parse.
+# Checks dependencies, env file health, API connectivity, and token permissions.
+# Run this BEFORE proxmox-sh-resources.
 #
 # Exit codes:
 #   0 - all checks passed
@@ -250,225 +250,81 @@ fn_check_api() {
 	b_pve_version="$(echo "${b_version}" | jq -r '.data.version // "unknown"')"
 	fn_log_ok "API reachable - Proxmox VE ${b_pve_version}"
 
-	# List pools
-	fn_list_pools "${b_curl}" "${b_auth}" "${b_base_url}"
-
-	# List storages
-	fn_list_storages "${b_curl}" "${b_auth}" "${b_base_url}"
-
-	# List VMs/LXCs
-	fn_list_resources "${b_curl}" "${b_auth}" "${b_base_url}"
-
-	# List SDN zones/vnets
-	fn_list_sdn "${b_curl}" "${b_auth}" "${b_base_url}"
-
-	# List nodes
-	fn_list_nodes "${b_curl}" "${b_auth}" "${b_base_url}"
+	# Check token permissions
+	fn_check_permissions "${b_curl}" "${b_auth}" "${b_base_url}"
 }
 
-fn_list_pools() {
+# ----------------------------------------
+# Section 5: Token permissions
+# ----------------------------------------
+fn_check_permissions() {
 	b_curl="${1}"
 	b_auth="${2}"
 	b_base_url="${3}"
 
+	fn_log_section "Token Permissions"
+
+	if ! b_perms="$(${b_curl} -H "${b_auth}" "${b_base_url}/access/permissions" 2>&1)"; then
+		fn_log_warn "cannot query token permissions"
+		return
+	fi
+
+	# Show paths where the token has at least one granted permission
+	b_granted="$(echo "${b_perms}" | jq -r '
+		[.data | to_entries[]
+			| select(.value | to_entries | map(select(.value == 1)) | length > 0)
+			| {
+				path: .key,
+				perms: [.value | to_entries[] | select(.value == 1) | .key] | sort
+			}
+		] | sort_by(.path)
+	')"
+
+	b_path_count="$(echo "${b_granted}" | jq 'length')"
+	if test "${b_path_count}" -eq 0; then
+		fn_log_warn "token has no granted permissions on any path"
+		return
+	fi
+
+	fn_log_ok "token has grants on ${b_path_count} paths"
+
+	# Group by path prefix for readable output
 	echo ""
 	echo "  Pools:"
-	if ! b_pools="$(${b_curl} -H "${b_auth}" "${b_base_url}/pools" 2>&1)"; then
-		fn_log_warn "cannot list pools (may need Sys.Audit permission)"
-		return
-	fi
-
-	b_pool_list="$(echo "${b_pools}" | jq -r '.data[].poolid' | sort)"
-	if test -z "${b_pool_list}"; then
-		echo "    (none visible)"
-		return
-	fi
-
-	echo "${b_pool_list}" | while read -r b_pool; do
-		b_member_count="$(
-			echo "${b_pools}" |
-				jq -r --arg p "${b_pool}" '.data[] | select(.poolid == $p) | (.members // []) | length'
-		)"
-		printf '    - %s (%s members)\n' "${b_pool}" "${b_member_count}"
-	done
-
-	# Check pool naming conventions
-	echo ""
-	echo "  Pool conventions:"
-	b_found_convention=false
-	for b_suffix in active dev prod offline; do
-		b_matches="$(echo "${b_pool_list}" | grep -c "\-${b_suffix}$" || true)"
-		if test "${b_matches}" -gt 0; then
-			b_found_convention=true
-			printf '    *-%s: %s pool(s)\n' "${b_suffix}" "${b_matches}"
-		fi
-	done
-	if test "${b_found_convention}" = "false"; then
-		fn_log_warn "no standard pool naming conventions detected (-active, -dev, -prod, -offline)"
-	fi
-}
-
-fn_list_storages() {
-	b_curl="${1}"
-	b_auth="${2}"
-	b_base_url="${3}"
+	echo "${b_granted}" | jq -r '.[] | select(.path | startswith("/pool/")) | "    \(.path)  \(.perms | join(", "))"'
 
 	echo ""
-	echo "  Storages:"
-	if ! b_storages="$(${b_curl} -H "${b_auth}" "${b_base_url}/storage" 2>&1)"; then
-		fn_log_warn "cannot list storages"
-		return
-	fi
-
-	echo "${b_storages}" | jq -r '.data[] | "    - \(.storage) (\(.type)) content=\(.content // "n/a")"' | sort
-}
-
-fn_list_resources() {
-	b_curl="${1}"
-	b_auth="${2}"
-	b_base_url="${3}"
+	echo "  Storage:"
+	echo "${b_granted}" | jq -r '.[] | select(.path | startswith("/storage/")) | "    \(.path)  \(.perms | join(", "))"'
 
 	echo ""
-	echo "  VMs/LXCs:"
-	if ! b_resources="$(${b_curl} -H "${b_auth}" "${b_base_url}/cluster/resources?type=vm" 2>&1)"; then
-		fn_log_warn "cannot list cluster resources"
-		return
-	fi
-
-	b_count="$(echo "${b_resources}" | jq '.data | length')"
-	if test "${b_count}" -eq 0; then
-		echo "    (none visible)"
-		return
-	fi
-
-	echo "    Total: ${b_count}"
-	echo ""
-
-	# Group by status
-	b_running="$(echo "${b_resources}" | jq '[.data[] | select(.status == "running")] | length')"
-	b_stopped="$(echo "${b_resources}" | jq '[.data[] | select(.status == "stopped")] | length')"
-	printf '    Running: %s, Stopped: %s\n' "${b_running}" "${b_stopped}"
-	echo ""
-
-	# List by pool if pools are visible in data, otherwise by node
-	echo "${b_resources}" | jq -r '
-        .data
-        | sort_by(.vmid)
-        | .[]
-        | "    \(.vmid)\t\(.name // "unnamed")\t\(.status)\t\(.node)\tpool=\(.pool // "none")"
-    '
-}
-
-fn_list_sdn() {
-	b_curl="${1}"
-	b_auth="${2}"
-	b_base_url="${3}"
-
-	echo ""
-	echo "  SDN Zones:"
-	if ! b_zones="$(${b_curl} -H "${b_auth}" "${b_base_url}/cluster/sdn/zones" 2>&1)"; then
-		fn_log_warn "cannot list SDN zones (SDN may not be configured)"
-		return
-	fi
-
-	b_zone_count="$(echo "${b_zones}" | jq '.data | length')"
-	if test "${b_zone_count}" -eq 0; then
-		echo "    (none configured)"
-	else
-		echo "${b_zones}" | jq -r '.data[] | "    - \(.zone) (\(.type))"' | sort
-	fi
-
-	echo ""
-	echo "  SDN VNets:"
-	if ! b_vnets="$(${b_curl} -H "${b_auth}" "${b_base_url}/cluster/sdn/vnets" 2>&1)"; then
-		fn_log_warn "cannot list SDN vnets"
-		return
-	fi
-
-	b_vnet_count="$(echo "${b_vnets}" | jq '.data | length')"
-	if test "${b_vnet_count}" -eq 0; then
-		echo "    (none configured)"
-	else
-		echo "${b_vnets}" | jq -r '.data[] | "    - \(.vnet) zone=\(.zone) tag=\(.tag // "none")"' | sort
-	fi
-}
-
-fn_list_nodes() {
-	b_curl="${1}"
-	b_auth="${2}"
-	b_base_url="${3}"
+	echo "  SDN:"
+	echo "${b_granted}" | jq -r '.[] | select(.path | startswith("/sdn/")) | "    \(.path)  \(.perms | join(", "))"'
 
 	echo ""
 	echo "  Nodes:"
-	if ! b_nodes="$(${b_curl} -H "${b_auth}" "${b_base_url}/nodes" 2>&1)"; then
-		fn_log_warn "cannot list nodes"
-		return
+	echo "${b_granted}" | jq -r '.[] | select(.path | startswith("/nodes")) | "    \(.path)  \(.perms | join(", "))"'
+
+	# Check for common required permissions
+	b_has_pool_allocate="$(echo "${b_granted}" | jq '[.[] | select(.path | startswith("/pool/")) | .perms[] | select(. == "Pool.Allocate")] | length')"
+	b_has_vm_allocate="$(echo "${b_granted}" | jq '[.[] | select(.path | startswith("/pool/")) | .perms[] | select(. == "VM.Allocate")] | length')"
+	b_has_datastore="$(echo "${b_granted}" | jq '[.[] | select(.path | startswith("/storage/")) | .perms[] | select(. == "Datastore.AllocateSpace")] | length')"
+
+	echo ""
+	if test "${b_has_pool_allocate}" -gt 0; then
+		fn_log_ok "Pool.Allocate granted (can add VMs to pools)"
+	else
+		fn_log_warn "Pool.Allocate not granted on any pool"
 	fi
-
-	echo "${b_nodes}" | jq -r '
-        .data
-        | sort_by(.node)
-        | .[]
-        | "    - \(.node) (\(.status)) cpu=\(.cpu // 0 | . * 100 | floor)% mem=\((.mem // 0) / 1073741824 | . * 10 | floor / 10)G/\((.maxmem // 0) / 1073741824 | . * 10 | floor / 10)G"
-    '
-}
-
-# ----------------------------------------
-# Section 5: Templates
-# ----------------------------------------
-fn_check_templates() {
-	fn_log_section "Templates"
-
-	if ! test -e ~/.config/proxmox-sh/current.env; then
-		fn_log_warn "skipping template checks - no current.env"
-		return
+	if test "${b_has_vm_allocate}" -gt 0; then
+		fn_log_ok "VM.Allocate granted (can create VMs)"
+	else
+		fn_log_warn "VM.Allocate not granted on any pool"
 	fi
-
-	# shellcheck disable=SC1090
-	. ~/.config/proxmox-sh/current.env || true
-
-	if test -z "${PROXMOX_HOST:-}" ||
-		test -z "${PROXMOX_TOKEN_ID:-}" ||
-		test -z "${PROXMOX_TOKEN_SECRET:-}"; then
-		fn_log_warn "skipping template checks - missing credentials"
-		return
-	fi
-
-	b_auth="Authorization: PVEAPIToken=${PROXMOX_TOKEN_ID}=${PROXMOX_TOKEN_SECRET}"
-	b_base_url="https://${PROXMOX_HOST}/api2/json"
-	b_curl="curl --max-time 10 --fail-with-body -sSL"
-	b_node="${PROXMOX_TARGET_NODE:-pve1}"
-	b_tmpl_storage="${PROXMOX_TEMPLATE_STORAGE:-}"
-
-	if test -z "${b_tmpl_storage}"; then
-		fn_log_warn "PROXMOX_TEMPLATE_STORAGE not set - cannot list templates"
-		return
-	fi
-
-	echo "  Available templates (${b_tmpl_storage}):"
-	if ! b_content="$(${b_curl} -H "${b_auth}" \
-		"${b_base_url}/nodes/${b_node}/storage/${b_tmpl_storage}/content?content=vztmpl" 2>&1)"; then
-		fn_log_warn "cannot list templates from ${b_tmpl_storage} on ${b_node}"
-		return
-	fi
-
-	echo "${b_content}" | jq -r '
-        .data
-        | sort_by(.volid)
-        | .[]
-        | "    - \(.volid) (\(.size // 0 | . / 1048576 | floor)MB)"
-    '
-
-	# Check if default template exists
-	if test -n "${PROXMOX_TEMPLATE_DEFAULT:-}"; then
-		b_default_match="$(echo "${b_content}" | jq -r --arg t "${PROXMOX_TEMPLATE_DEFAULT}" '
-            .data[] | select(.volid | endswith($t)) | .volid
-        ')"
-		if test -n "${b_default_match}"; then
-			fn_log_ok "default template '${PROXMOX_TEMPLATE_DEFAULT}' found"
-		else
-			fn_log_warn "default template '${PROXMOX_TEMPLATE_DEFAULT}' NOT found in ${b_tmpl_storage}"
-		fi
+	if test "${b_has_datastore}" -gt 0; then
+		fn_log_ok "Datastore.AllocateSpace granted (can allocate storage)"
+	else
+		fn_log_warn "Datastore.AllocateSpace not granted on any storage"
 	fi
 }
 
@@ -480,6 +336,7 @@ fn_summary() {
 
 	if test "${g_exit_code}" -eq 0; then
 		echo "  All checks passed. Ready to use proxmox-sh."
+		echo "  Run proxmox-sh-resources for infrastructure details."
 	elif test "${g_exit_code}" -eq 2; then
 		echo "  Passed with warnings. Review [WARN] items above."
 	else
@@ -496,7 +353,6 @@ main() {
 	fn_check_proxmox_sh
 	fn_check_env_files
 	fn_check_api
-	fn_check_templates
 	fn_summary
 
 	return "${g_exit_code}"

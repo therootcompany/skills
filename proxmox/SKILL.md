@@ -9,14 +9,21 @@ description:
 ## MUST: Run Doctor First
 
 MUST: Run `proxmox-sh-doctor` before any Proxmox operation. It validates dependencies,
-env files, API connectivity, and lists infrastructure (pools, storages, VMs, zones, templates).
+env files, API connectivity, and token permissions.
 
 ```sh
 sh ~/Agents/skills/proxmox/scripts/proxmox-sh-doctor
 ```
 
-If it fails, fix the errors before proceeding. The doctor output gives the agent
-everything it needs to make informed decisions in subsequent steps.
+If it fails, fix the errors before proceeding.
+
+Then run `proxmox-sh-resources` to list infrastructure (pools, storages, VMs,
+SDN zones, nodes, templates). This output gives the agent everything it needs
+to make informed decisions in subsequent steps.
+
+```sh
+sh ~/Agents/skills/proxmox/scripts/proxmox-sh-resources
+```
 
 ## Sub-skills
 
