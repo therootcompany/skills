@@ -44,7 +44,7 @@ fn_check_deps() {
 	echo ""
 	echo "# deps"
 
-	for b_cmd in webi go jq curl ssh-pubkey; do
+	for b_cmd in webi go jq curl sclient ssh-pubkey; do
 		if command -v "${b_cmd}" >/dev/null 2>&1; then
 			b_ver=""
 			case "${b_cmd}" in
@@ -57,7 +57,7 @@ fn_check_deps() {
 			fi
 		else
 			case "${b_cmd}" in
-			ssh-pubkey) fn_warn "${b_cmd} not installed (webi ${b_cmd})" ;;
+			sclient | ssh-pubkey) fn_warn "${b_cmd} not installed (webi ${b_cmd})" ;;
 			webi) fn_warn "${b_cmd} not installed (curl https://webi.sh | sh)" ;;
 			*) fn_err "${b_cmd} not installed (webi ${b_cmd})" ;;
 			esac

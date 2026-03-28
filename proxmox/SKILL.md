@@ -55,21 +55,27 @@ env-switch proxmox-sh <profile-name>
 **OS selection:** systemd => Ubuntu, OpenRC/minimal => Alpine.
 Flavor preference: user's own template > `bnna` variant > default.
 
-**SSH config:** User needs a wildcard entry before SSH works:
+**SSH config:** Check before creating a VM:
 
-```
-Host *.<DIRECT_IP_DOMAIN>
-    ProxyCommand sclient --alpn ssh %h
+```sh
+sh ~/Agents/skills/proxmox/scripts/proxmox-sh-ssh-check
 ```
 
-Ask if they want a friendly CNAME (e.g. `feat-foo.example.com`) pointing to
-the direct-IP domain, or if `tls-10-11-xx-yy.<DIRECT_IP_DOMAIN>` is enough.
+If missing, it prints the entry to add. MUST get explicit permission before
+touching `~/.ssh/config`. Ask if they also want a friendly CNAME
+(e.g. `feat-foo.example.com` -> `tls-10-11-xx-yy.<DIRECT_IP_DOMAIN>`).
 If CNAME, also add a host-specific SSH entry:
 
 ```
 Host feat-foo.example.com
     Hostname tls-10-11-xx-yy.<DIRECT_IP_DOMAIN>
     ProxyCommand sclient --alpn ssh %h
+```
+
+**Next VMID:** Get the next available VMID and its IP:
+
+```sh
+sh ~/Agents/skills/proxmox/scripts/proxmox-sh-next-vmid
 ```
 
 **proxmox-create** forces tty output -- handle or work around it.

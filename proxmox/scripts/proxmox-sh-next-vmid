@@ -1,0 +1,142 @@
+#!/bin/sh
+set -e
+set -u
+
+# proxmox-sh-next-vmid: find the next available VMID for a profile
+#
+# Reads PROXMOX_ID_PREFIX and PROXMOX_ID_START from the env, fetches
+# existing VMIDs via the API, and prints the next available one along
+# with its corresponding IP address.
+#
+# Usage:
+#   proxmox-sh-next-vmid                    # uses current.env
+#   proxmox-sh-next-vmid --env <file>       # uses specific env
+#
+# Exit codes:
+#   0 - found next VMID
+#   1 - error (missing env, API failure)
+
+fn_usage() {
+	echo "Usage: proxmox-sh-next-vmid [--env <file>]"
+	echo ""
+	echo "Find next available VMID and its IP for the current profile."
+}
+
+main() {
+	b_env_file=""
+
+	while test -n "${1:-}"; do
+		case "${1}" in
+		--env)
+			shift
+			b_env_file="${1:-}"
+			if test -z "${b_env_file}"; then
+				echo "ERROR: --env requires a file path" >&2
+				return 1
+			fi
+			;;
+		--help | -help | help)
+			fn_usage
+			return 0
+			;;
+		*)
+			echo "Unknown argument: ${1}" >&2
+			echo ""
+			fn_usage >&2
+			return 1
+			;;
+		esac
+		shift
+	done
+
+	# Load env
+	if test -n "${b_env_file}"; then
+		if ! test -e "${b_env_file}"; then
+			echo "ERROR: env file not found: ${b_env_file}" >&2
+			return 1
+		fi
+	else
+		if ! test -e ~/.config/proxmox-sh/current.env; then
+			echo "ERROR: no current.env" >&2
+			return 1
+		fi
+		b_env_file=~/.config/proxmox-sh/current.env
+	fi
+
+	# shellcheck disable=SC1090
+	. "${b_env_file}" || true
+
+	b_prefix="${PROXMOX_ID_PREFIX:-}"
+	b_start="${PROXMOX_ID_START:-2}"
+
+	if test -z "${b_prefix}"; then
+		echo "ERROR: PROXMOX_ID_PREFIX not set" >&2
+		return 1
+	fi
+	if test -z "${PROXMOX_HOST:-}" ||
+		test -z "${PROXMOX_TOKEN_ID:-}" ||
+		test -z "${PROXMOX_TOKEN_SECRET:-}"; then
+		echo "ERROR: missing HOST/TOKEN vars" >&2
+		return 1
+	fi
+
+	b_auth="Authorization: PVEAPIToken=${PROXMOX_TOKEN_ID}=${PROXMOX_TOKEN_SECRET}"
+	b_base_url="https://${PROXMOX_HOST}/api2/json"
+	b_curl="curl --max-time 10 --fail-with-body -sSL"
+
+	# Fetch existing VMIDs with this prefix
+	if ! b_resources="$(${b_curl} -H "${b_auth}" "${b_base_url}/cluster/resources?type=vm" 2>&1)"; then
+		echo "ERROR: cannot fetch VMs" >&2
+		echo "${b_resources}" >&2
+		return 1
+	fi
+
+	# Extract indices in use (last 3 digits of VMIDs matching our prefix)
+	b_used="$(echo "${b_resources}" | jq -r --arg pfx "${b_prefix}" '
+		[.data[].vmid | tostring | select(startswith($pfx)) | .[$pfx | length:] | tonumber]
+		| sort | .[]
+	')"
+
+	echo "# next-vmid"
+	printf 'prefix\t%s\n' "${b_prefix}"
+	printf 'profile\t%s\n' "$(basename "${b_env_file}")"
+
+	# Find first unused index >= start
+	b_index="${b_start}"
+	while true; do
+		b_found=false
+		for b_used_idx in ${b_used}; do
+			if test "${b_used_idx}" -eq "${b_index}"; then
+				b_found=true
+				break
+			fi
+		done
+		if test "${b_found}" = "false"; then
+			break
+		fi
+		b_index=$((b_index + 1))
+	done
+
+	b_vmid="${b_prefix}${b_index}"
+
+	# Derive IP: prefix = first 2 octets of subnet, index = last octet
+	# prefix 1104 -> 11.04, index 209 -> 10.11.4.209
+	b_oct2="$(echo "${b_prefix}" | cut -c1-2 | sed 's/^0*//')"
+	b_oct3="$(echo "${b_prefix}" | cut -c3-4 | sed 's/^0*//')"
+	b_ip="10.${b_oct2}.${b_oct3}.${b_index}"
+
+	printf 'vmid\t%s\n' "${b_vmid}"
+	printf 'index\t%s\n' "${b_index}"
+	printf 'ip\t%s\n' "${b_ip}"
+
+	if test -n "${DIRECT_IP_DOMAIN:-}"; then
+		b_ip_dashed="$(echo "${b_ip}" | tr '.' '-')"
+		printf 'tls_domain\ttls-%s.%s\n' "${b_ip_dashed}" "${DIRECT_IP_DOMAIN}"
+	fi
+
+	# Show how many are in use
+	b_count="$(echo "${b_used}" | grep -c . || true)"
+	printf 'in_use\t%s\n' "${b_count}"
+}
+
+main "$@"
