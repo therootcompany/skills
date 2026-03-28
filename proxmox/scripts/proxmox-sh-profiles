@@ -53,6 +53,14 @@ main() {
 		printf 'current\t%s\n' "${b_current}"
 	fi
 
+	# Dim host/pool columns when outputting to a terminal
+	b_dim=""
+	b_reset=""
+	if test -t 1; then
+		b_dim='\033[2m'
+		b_reset='\033[0m'
+	fi
+
 	echo ""
 	printf '# n\tprofile\thost\tpools\n'
 
@@ -82,7 +90,8 @@ main() {
 			b_marker=" [current]"
 		fi
 
-		printf '%s\t%s%s\t%s\t%s\n' "${b_n}" "${b_name}" "${b_marker}" "${b_host}" "${b_pools}"
+		# shellcheck disable=SC2059
+		printf "%s\t%s%s\t${b_dim}%s\t%s${b_reset}\n" "${b_n}" "${b_name}" "${b_marker}" "${b_host}" "${b_pools}"
 	done
 
 	if test "${b_n}" -eq 0; then
