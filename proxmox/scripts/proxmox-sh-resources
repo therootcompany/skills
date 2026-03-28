@@ -8,15 +8,15 @@ set -u
 # Designed for agent consumption; colored summary at the end for humans.
 #
 # Usage:
-#   proxmox-sh-resources          # full: 8+ API calls, all details
-#   proxmox-sh-resources --fast   # fast: 3 API calls (permissions + VMs)
+#   proxmox-sh-resources            # fast: 3 API calls (permissions + VMs)
+#   proxmox-sh-resources --detail   # full: 8+ API calls, all details
 #
 # Exit codes:
 #   0 - listing completed
 #   1 - cannot connect or missing env
 
 g_exit_code=0
-g_fast=false
+g_detail=false
 
 fn_ok() {
 	printf 'OK: %s\n' "$1"
@@ -63,9 +63,9 @@ fn_init() {
 	b_pve_version="$(echo "${b_version}" | jq -r '.data.version // "unknown"')"
 
 	echo "# proxmox-sh-resources"
-	b_mode="full"
-	if test "${g_fast}" = "true"; then
-		b_mode="fast"
+	b_mode="fast"
+	if test "${g_detail}" = "true"; then
+		b_mode="detail"
 	fi
 	# shellcheck disable=SC2012
 	b_profile="$(ls -l ~/.config/proxmox-sh/current.env | sed 's;.*/;;')"
@@ -197,7 +197,7 @@ fn_fast_nodes() {
 	else
 		echo "${b_nodes}"
 	fi
-	echo "# (run without --fast for CPU/memory metrics)"
+	echo "# (run with --detail for CPU/memory metrics)"
 }
 
 # ========================================
@@ -384,18 +384,18 @@ fn_list_templates() {
 # Main
 # ----------------------------------------
 fn_usage() {
-	echo "Usage: proxmox-sh-resources [--fast]"
+	echo "Usage: proxmox-sh-resources [--detail]"
 	echo ""
-	echo "List Proxmox infrastructure: pools, storages, VMs, SDN, nodes, templates."
+	echo "List Proxmox infrastructure: pools, storages, VMs, SDN, nodes."
 	echo ""
-	echo "  --fast   3 API calls (permissions + VMs) instead of 8+"
+	echo "  --detail   8+ API calls: node metrics, vnet details, pool members, templates"
 }
 
 main() {
 	while test -n "${1:-}"; do
 		case "${1}" in
-		--fast)
-			g_fast=true
+		--detail)
+			g_detail=true
 			;;
 		--help | -help | help)
 			fn_usage
@@ -413,9 +413,7 @@ main() {
 
 	fn_init || return 1
 
-	if test "${g_fast}" = "true"; then
-		fn_fast
-	else
+	if test "${g_detail}" = "true"; then
 		fn_list_pools
 		fn_list_storages
 		fn_list_resources

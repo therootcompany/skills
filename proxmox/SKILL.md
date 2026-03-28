@@ -33,15 +33,14 @@ SDN zones, nodes, templates). This output gives the agent everything it needs
 to make informed decisions in subsequent steps.
 
 ```sh
-sh ~/Agents/skills/proxmox/scripts/proxmox-sh-resources          # full: 8+ API calls
-sh ~/Agents/skills/proxmox/scripts/proxmox-sh-resources --fast   # fast: 3 API calls
+sh ~/Agents/skills/proxmox/scripts/proxmox-sh-resources            # default: 3 API calls
+sh ~/Agents/skills/proxmox/scripts/proxmox-sh-resources --detail   # full: 8+ API calls
 ```
 
-Use `--fast` for quick orientation (3 API calls vs 8+). It pulls pools,
-storages, SDN zones, and node grants from `/access/permissions` in a single
-call, then one call for VM names/status. Use this to inspect what each token
-can see. Full mode adds node CPU/memory metrics, vnet details, pool member
-counts, and template listing.
+The default mode pulls pools, storages, SDN zones, and node grants from
+`/access/permissions` in a single call, then one call for VM names/status.
+Use this to inspect what each token can see. `--detail` adds node CPU/memory
+metrics, vnet details, pool member counts, and template listing.
 
 ## Sub-skills
 
