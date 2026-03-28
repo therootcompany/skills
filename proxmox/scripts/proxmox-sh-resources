@@ -93,11 +93,25 @@ fn_fast() {
 	fi
 
 	g_granted="$(echo "${g_perms}" | jq '
+		# Map full permission lists to short capability flags
+		def caps:
+			. as $p |
+			(if ($p | any(startswith("VM.Allocate"))) then ["vm-alloc"] else [] end) +
+			(if ($p | any(startswith("VM.PowerMgmt"))) then ["vm-manage"] else [] end) +
+			(if ($p | any(startswith("Pool.Allocate"))) then ["pool-alloc"] else [] end) +
+			(if ($p | any(startswith("Datastore.AllocateSpace"))) then ["ds-alloc"] else [] end) +
+			(if ($p | any(startswith("Datastore.AllocateTemplate"))) then ["ds-tmpl"] else [] end) +
+			(if ($p | any(startswith("SDN.Use"))) then ["sdn-use"] else [] end) +
+			(if ($p | any(startswith("SDN.Allocate"))) then ["sdn-alloc"] else [] end) +
+			(if ($p | any(test("Audit"))) then ["audit"] else [] end) +
+			(if ($p | any(startswith("Sys."))) then ["sys"] else [] end)
+			| unique;
 		[.data | to_entries[]
 			| select(.value | to_entries | map(select(.value == 1)) | length > 0)
 			| {
 				path: .key,
-				perms: [.value | to_entries[] | select(.value == 1) | .key] | sort
+				perms: [.value | to_entries[] | select(.value == 1) | .key] | sort,
+				caps: ([.value | to_entries[] | select(.value == 1) | .key] | caps)
 			}
 		] | sort_by(.path)
 	')"
@@ -112,9 +126,9 @@ fn_fast() {
 fn_fast_pools() {
 	echo ""
 	echo "# pools"
-	printf '# pool\tpermissions\n'
+	printf '# pool\tcapabilities\n'
 
-	b_pools="$(echo "${g_granted}" | jq -r '.[] | select(.path | startswith("/pool/")) | [(.path | ltrimstr("/pool/")), (.perms | join(","))] | @tsv')"
+	b_pools="$(echo "${g_granted}" | jq -r '.[] | select(.path | startswith("/pool/")) | [(.path | ltrimstr("/pool/")), (.caps | join(","))] | @tsv')"
 	if test -z "${b_pools}"; then
 		echo "# (none)"
 		return
@@ -134,9 +148,9 @@ fn_fast_pools() {
 fn_fast_storages() {
 	echo ""
 	echo "# storages"
-	printf '# storage\tpermissions\n'
+	printf '# storage\tcapabilities\n'
 
-	b_storages="$(echo "${g_granted}" | jq -r '.[] | select(.path | startswith("/storage/")) | [(.path | ltrimstr("/storage/")), (.perms | join(","))] | @tsv')"
+	b_storages="$(echo "${g_granted}" | jq -r '.[] | select(.path | startswith("/storage/")) | [(.path | ltrimstr("/storage/")), (.caps | join(","))] | @tsv')"
 	if test -z "${b_storages}"; then
 		echo "# (none)"
 		return
@@ -185,9 +199,9 @@ fn_fast_vms() {
 fn_fast_sdn() {
 	echo ""
 	echo "# sdn-zones"
-	printf '# zone\tpermissions\n'
+	printf '# zone\tcapabilities\n'
 
-	b_zones="$(echo "${g_granted}" | jq -r '.[] | select(.path | startswith("/sdn/zones/")) | [(.path | ltrimstr("/sdn/zones/")), (.perms | join(","))] | @tsv')"
+	b_zones="$(echo "${g_granted}" | jq -r '.[] | select(.path | startswith("/sdn/zones/")) | [(.path | ltrimstr("/sdn/zones/")), (.caps | join(","))] | @tsv')"
 	if test -z "${b_zones}"; then
 		echo "# (none)"
 	else
@@ -199,7 +213,7 @@ fn_fast_nodes() {
 	echo ""
 	echo "# nodes"
 
-	b_nodes="$(echo "${g_granted}" | jq -r '.[] | select(.path | startswith("/nodes")) | [.path, (.perms | join(","))] | @tsv')"
+	b_nodes="$(echo "${g_granted}" | jq -r '.[] | select(.path | startswith("/nodes")) | [.path, (.caps | join(","))] | @tsv')"
 	if test -z "${b_nodes}"; then
 		echo "# (none)"
 	else
@@ -436,6 +450,8 @@ main() {
 		fn_list_sdn
 		fn_list_nodes
 		fn_list_templates
+	else
+		fn_fast
 	fi
 
 	echo ""

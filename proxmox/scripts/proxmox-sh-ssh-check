@@ -57,12 +57,21 @@ main() {
 		return 1
 	fi
 
-	# Look for Host *.<domain> in ssh config
-	if grep -q "Host.*${b_pattern}" ~/.ssh/config 2>/dev/null; then
-		echo "OK: wildcard entry found for ${b_pattern}"
+	# Search ~/.ssh/config and any Include'd files in config.d
+	b_ssh_files="$(find ~/.ssh -name '*.sshconfig' -o -name 'config' 2>/dev/null)"
+
+	# Look for Host *.<domain> across all ssh config files
+	# Use grep -F because b_pattern contains a literal * (e.g. *.vms.example.com)
+	b_match_file=""
+	if test -n "${b_ssh_files}"; then
+		b_match_file="$(echo "${b_ssh_files}" | xargs grep -lF "${b_pattern}" 2>/dev/null | head -1)" || true
+	fi
+
+	if test -n "${b_match_file}"; then
+		printf 'OK: wildcard entry found for %s in %s\n' "${b_pattern}" "${b_match_file}"
 
 		# Also check sclient is in the ProxyCommand
-		if grep -A2 "Host.*${b_pattern}" ~/.ssh/config | grep -q "sclient"; then
+		if grep -A2 -F "${b_pattern}" "${b_match_file}" | grep -q "sclient"; then
 			echo "OK: sclient ProxyCommand present"
 		else
 			echo "WARN: Host entry exists but no sclient ProxyCommand"
@@ -79,9 +88,11 @@ fn_print_needed() {
 	b_pattern="${1}"
 	b_domain="${2}"
 
+	b_target_file=~/.ssh/config.d/proxmox-sh.sshconfig
+
 	echo ""
 	echo "# add-to-ssh-config"
-	echo "# Add this to ~/.ssh/config:"
+	printf 'file\t%s\n' "${b_target_file}"
 	echo ""
 	printf 'Host %s\n' "${b_pattern}"
 	printf '    ProxyCommand sclient --alpn ssh %%h\n'
