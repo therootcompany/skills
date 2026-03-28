@@ -1,0 +1,505 @@
+#!/bin/sh
+set -e
+set -u
+
+# proxmox-sh-doctor: validate proxmox-sh environment for agent use
+#
+# Checks dependencies, env file health, and API connectivity.
+# Outputs structured diagnostics that agents can parse.
+#
+# Exit codes:
+#   0 - all checks passed
+#   1 - fatal: missing dependency or broken env
+#   2 - warning: connectivity or API issue (env is valid)
+
+g_exit_code=0
+g_warnings=""
+g_errors=""
+
+fn_log_ok() {
+	printf '  [OK] %s\n' "$1"
+}
+
+fn_log_warn() {
+	printf '  [WARN] %s\n' "$1" >&2
+	g_warnings="${g_warnings}${1}\n"
+	if test "${g_exit_code}" -lt 2; then
+		g_exit_code=2
+	fi
+}
+
+fn_log_err() {
+	printf '  [ERROR] %s\n' "$1" >&2
+	g_errors="${g_errors}${1}\n"
+	g_exit_code=1
+}
+
+fn_log_section() {
+	echo ""
+	echo "=== $1 ==="
+}
+
+# ----------------------------------------
+# Section 1: Dependencies
+# ----------------------------------------
+fn_check_deps() {
+	fn_log_section "Dependencies"
+
+	# webi
+	if command -v webi >/dev/null 2>&1; then
+		fn_log_ok "webi installed"
+	else
+		fn_log_warn "webi not installed (curl https://webi.sh | sh)"
+	fi
+
+	# go
+	if command -v go >/dev/null 2>&1; then
+		b_go_version="$(go version | cut -d' ' -f3)"
+		fn_log_ok "go installed (${b_go_version})"
+	else
+		fn_log_err "go not installed (webi go)"
+	fi
+
+	# jq (used by proxmox-create for API responses)
+	if command -v jq >/dev/null 2>&1; then
+		fn_log_ok "jq installed"
+	else
+		fn_log_err "jq not installed (webi jq)"
+	fi
+
+	# curl
+	if command -v curl >/dev/null 2>&1; then
+		fn_log_ok "curl installed"
+	else
+		fn_log_err "curl not installed"
+	fi
+
+	# ssh-pubkey (optional, used by proxmox-create for default keys)
+	if command -v ssh-pubkey >/dev/null 2>&1; then
+		fn_log_ok "ssh-pubkey installed"
+	else
+		fn_log_warn "ssh-pubkey not installed (webi ssh-pubkey) - proxmox-create will require explicit key path"
+	fi
+}
+
+# ----------------------------------------
+# Section 2: proxmox-sh installation
+# ----------------------------------------
+fn_check_proxmox_sh() {
+	fn_log_section "proxmox-sh"
+
+	if ! test -d ~/.local/opt/proxmox-sh/; then
+		fn_log_err "proxmox-sh not installed at ~/.local/opt/proxmox-sh/"
+		echo "  Install:"
+		echo "    mkdir -p ~/.local/opt/"
+		echo "    git clone https://github.com/therootcompany/proxmox-sh.git ~/.local/opt/proxmox-sh"
+		return
+	fi
+	fn_log_ok "proxmox-sh installed at ~/.local/opt/proxmox-sh/"
+
+	# Check it's in PATH
+	if command -v proxmox-create >/dev/null 2>&1; then
+		fn_log_ok "proxmox-create in PATH"
+	else
+		fn_log_warn "proxmox-create not in PATH"
+		echo "  Fix:"
+		# shellcheck disable=SC2016
+		echo '    pathman add ~/.local/opt/proxmox-sh/bin'
+	fi
+
+	if command -v env-switch >/dev/null 2>&1; then
+		fn_log_ok "env-switch in PATH"
+	else
+		fn_log_warn "env-switch not in PATH (same fix as above)"
+	fi
+
+	# Check config dir exists
+	# shellcheck disable=SC2088
+	if ! test -d ~/.config/proxmox-sh/; then
+		fn_log_warn "~/.config/proxmox-sh/ does not exist - run: proxmox-sh-init"
+		return
+	fi
+	# shellcheck disable=SC2088
+	fn_log_ok "~/.config/proxmox-sh/ exists"
+}
+
+# ----------------------------------------
+# Section 3: Environment files
+# ----------------------------------------
+fn_check_env_files() {
+	fn_log_section "Environment Files"
+
+	# shellcheck disable=SC2088
+	if ! test -d ~/.config/proxmox-sh/; then
+		fn_log_err "~/.config/proxmox-sh/ missing - run proxmox-sh-init first"
+		return
+	fi
+
+	# List env files (excluding current.env symlink and example.env)
+	echo "  Profiles:"
+	b_profile_count=0
+	for b_env in ~/.config/proxmox-sh/*.env; do
+		b_name="$(basename "${b_env}")"
+		if test "${b_name}" = "*.env"; then
+			fn_log_warn "no .env files found in ~/.config/proxmox-sh/"
+			return
+		fi
+		if test "${b_name}" = "current.env"; then
+			continue
+		fi
+		if test "${b_name}" = "example.env"; then
+			continue
+		fi
+		b_profile_count=$((b_profile_count + 1))
+		printf '    - %s\n' "${b_name}"
+	done
+
+	if test "${b_profile_count}" -eq 0; then
+		fn_log_warn "no profiles found (only example.env)"
+		return
+	fi
+
+	# Check current.env symlink
+	if ! test -e ~/.config/proxmox-sh/current.env; then
+		fn_log_warn "no current.env - run: env-switch proxmox-sh <profile>"
+		return
+	fi
+	if ! test -L ~/.config/proxmox-sh/current.env; then
+		fn_log_warn "current.env is a regular file, not a symlink - env-switch expects a symlink"
+		return
+	fi
+
+	# shellcheck disable=SC2012
+	b_current_target="$(ls -l ~/.config/proxmox-sh/current.env | sed 's;.*/;;')"
+	fn_log_ok "current.env -> ${b_current_target}"
+
+	# Validate current env contents
+	fn_validate_env_file ~/.config/proxmox-sh/current.env
+}
+
+fn_validate_env_file() {
+	b_env_file="${1}"
+
+	# Source to check variables
+	# shellcheck disable=SC1090
+	(
+		. "${b_env_file}" || true
+
+		echo "  Config:"
+		printf '    PROXMOX_HOST=%s\n' "${PROXMOX_HOST:-<unset>}"
+		printf '    PROXMOX_TARGET_NODE=%s\n' "${PROXMOX_TARGET_NODE:-<unset>}"
+		printf '    PROXMOX_ID_PREFIX=%s\n' "${PROXMOX_ID_PREFIX:-<unset>}"
+		printf '    PROXMOX_RESOURCE_POOL=%s\n' "${PROXMOX_RESOURCE_POOL:-<unset>}"
+		if test -n "${PROXMOX_VNET:-}"; then
+			printf '    PROXMOX_VNET=%s\n' "${PROXMOX_VNET}"
+		elif test -n "${PROXMOX_BRIDGE:-}"; then
+			printf '    PROXMOX_BRIDGE=%s\n' "${PROXMOX_BRIDGE}"
+		fi
+		printf '    PROXMOX_SEARCH_DOMAIN=%s\n' "${PROXMOX_SEARCH_DOMAIN:-<unset>}"
+		printf '    DIRECT_IP_DOMAIN=%s\n' "${DIRECT_IP_DOMAIN:-<unset>}"
+		printf '    PROXMOX_TEMPLATE_DEFAULT=%s\n' "${PROXMOX_TEMPLATE_DEFAULT:-<unset>}"
+
+		# Check required vars
+		if test -z "${PROXMOX_HOST:-}"; then
+			echo "  [ERROR] PROXMOX_HOST not set" >&2
+		fi
+		if test -z "${PROXMOX_TOKEN_ID:-}"; then
+			echo "  [ERROR] PROXMOX_TOKEN_ID not set" >&2
+		fi
+		if test -z "${PROXMOX_TOKEN_SECRET:-}"; then
+			echo "  [ERROR] PROXMOX_TOKEN_SECRET not set" >&2
+		fi
+		if test -n "${PROXMOX_TOKEN_ID:-}" && test -n "${PROXMOX_TOKEN_SECRET:-}"; then
+			echo "  [OK] PROXMOX_TOKEN_ID and PROXMOX_TOKEN_SECRET are set"
+		fi
+	)
+}
+
+# ----------------------------------------
+# Section 4: API connectivity
+# ----------------------------------------
+fn_check_api() {
+	fn_log_section "API Connectivity"
+
+	if ! test -e ~/.config/proxmox-sh/current.env; then
+		fn_log_warn "skipping API checks - no current.env"
+		return
+	fi
+
+	# shellcheck disable=SC1090
+	. ~/.config/proxmox-sh/current.env || true
+
+	if test -z "${PROXMOX_HOST:-}" ||
+		test -z "${PROXMOX_TOKEN_ID:-}" ||
+		test -z "${PROXMOX_TOKEN_SECRET:-}"; then
+		fn_log_warn "skipping API checks - missing HOST/TOKEN vars"
+		return
+	fi
+
+	b_auth="Authorization: PVEAPIToken=${PROXMOX_TOKEN_ID}=${PROXMOX_TOKEN_SECRET}"
+	b_base_url="https://${PROXMOX_HOST}/api2/json"
+	b_curl="curl --max-time 10 --fail-with-body -sSL"
+
+	# Test basic connectivity
+	if ! b_version="$(${b_curl} -H "${b_auth}" "${b_base_url}/version" 2>&1)"; then
+		fn_log_err "cannot reach Proxmox API at ${PROXMOX_HOST}"
+		echo "  Response: ${b_version}" >&2
+		return
+	fi
+
+	b_pve_version="$(echo "${b_version}" | jq -r '.data.version // "unknown"')"
+	fn_log_ok "API reachable - Proxmox VE ${b_pve_version}"
+
+	# List pools
+	fn_list_pools "${b_curl}" "${b_auth}" "${b_base_url}"
+
+	# List storages
+	fn_list_storages "${b_curl}" "${b_auth}" "${b_base_url}"
+
+	# List VMs/LXCs
+	fn_list_resources "${b_curl}" "${b_auth}" "${b_base_url}"
+
+	# List SDN zones/vnets
+	fn_list_sdn "${b_curl}" "${b_auth}" "${b_base_url}"
+
+	# List nodes
+	fn_list_nodes "${b_curl}" "${b_auth}" "${b_base_url}"
+}
+
+fn_list_pools() {
+	b_curl="${1}"
+	b_auth="${2}"
+	b_base_url="${3}"
+
+	echo ""
+	echo "  Pools:"
+	if ! b_pools="$(${b_curl} -H "${b_auth}" "${b_base_url}/pools" 2>&1)"; then
+		fn_log_warn "cannot list pools (may need Sys.Audit permission)"
+		return
+	fi
+
+	b_pool_list="$(echo "${b_pools}" | jq -r '.data[].poolid' | sort)"
+	if test -z "${b_pool_list}"; then
+		echo "    (none visible)"
+		return
+	fi
+
+	echo "${b_pool_list}" | while read -r b_pool; do
+		b_member_count="$(
+			echo "${b_pools}" |
+				jq -r --arg p "${b_pool}" '.data[] | select(.poolid == $p) | (.members // []) | length'
+		)"
+		printf '    - %s (%s members)\n' "${b_pool}" "${b_member_count}"
+	done
+
+	# Check pool naming conventions
+	echo ""
+	echo "  Pool conventions:"
+	b_found_convention=false
+	for b_suffix in active dev prod offline; do
+		b_matches="$(echo "${b_pool_list}" | grep -c "\-${b_suffix}$" || true)"
+		if test "${b_matches}" -gt 0; then
+			b_found_convention=true
+			printf '    *-%s: %s pool(s)\n' "${b_suffix}" "${b_matches}"
+		fi
+	done
+	if test "${b_found_convention}" = "false"; then
+		fn_log_warn "no standard pool naming conventions detected (-active, -dev, -prod, -offline)"
+	fi
+}
+
+fn_list_storages() {
+	b_curl="${1}"
+	b_auth="${2}"
+	b_base_url="${3}"
+
+	echo ""
+	echo "  Storages:"
+	if ! b_storages="$(${b_curl} -H "${b_auth}" "${b_base_url}/storage" 2>&1)"; then
+		fn_log_warn "cannot list storages"
+		return
+	fi
+
+	echo "${b_storages}" | jq -r '.data[] | "    - \(.storage) (\(.type)) content=\(.content // "n/a")"' | sort
+}
+
+fn_list_resources() {
+	b_curl="${1}"
+	b_auth="${2}"
+	b_base_url="${3}"
+
+	echo ""
+	echo "  VMs/LXCs:"
+	if ! b_resources="$(${b_curl} -H "${b_auth}" "${b_base_url}/cluster/resources?type=vm" 2>&1)"; then
+		fn_log_warn "cannot list cluster resources"
+		return
+	fi
+
+	b_count="$(echo "${b_resources}" | jq '.data | length')"
+	if test "${b_count}" -eq 0; then
+		echo "    (none visible)"
+		return
+	fi
+
+	echo "    Total: ${b_count}"
+	echo ""
+
+	# Group by status
+	b_running="$(echo "${b_resources}" | jq '[.data[] | select(.status == "running")] | length')"
+	b_stopped="$(echo "${b_resources}" | jq '[.data[] | select(.status == "stopped")] | length')"
+	printf '    Running: %s, Stopped: %s\n' "${b_running}" "${b_stopped}"
+	echo ""
+
+	# List by pool if pools are visible in data, otherwise by node
+	echo "${b_resources}" | jq -r '
+        .data
+        | sort_by(.vmid)
+        | .[]
+        | "    \(.vmid)\t\(.name // "unnamed")\t\(.status)\t\(.node)\tpool=\(.pool // "none")"
+    '
+}
+
+fn_list_sdn() {
+	b_curl="${1}"
+	b_auth="${2}"
+	b_base_url="${3}"
+
+	echo ""
+	echo "  SDN Zones:"
+	if ! b_zones="$(${b_curl} -H "${b_auth}" "${b_base_url}/cluster/sdn/zones" 2>&1)"; then
+		fn_log_warn "cannot list SDN zones (SDN may not be configured)"
+		return
+	fi
+
+	b_zone_count="$(echo "${b_zones}" | jq '.data | length')"
+	if test "${b_zone_count}" -eq 0; then
+		echo "    (none configured)"
+	else
+		echo "${b_zones}" | jq -r '.data[] | "    - \(.zone) (\(.type))"' | sort
+	fi
+
+	echo ""
+	echo "  SDN VNets:"
+	if ! b_vnets="$(${b_curl} -H "${b_auth}" "${b_base_url}/cluster/sdn/vnets" 2>&1)"; then
+		fn_log_warn "cannot list SDN vnets"
+		return
+	fi
+
+	b_vnet_count="$(echo "${b_vnets}" | jq '.data | length')"
+	if test "${b_vnet_count}" -eq 0; then
+		echo "    (none configured)"
+	else
+		echo "${b_vnets}" | jq -r '.data[] | "    - \(.vnet) zone=\(.zone) tag=\(.tag // "none")"' | sort
+	fi
+}
+
+fn_list_nodes() {
+	b_curl="${1}"
+	b_auth="${2}"
+	b_base_url="${3}"
+
+	echo ""
+	echo "  Nodes:"
+	if ! b_nodes="$(${b_curl} -H "${b_auth}" "${b_base_url}/nodes" 2>&1)"; then
+		fn_log_warn "cannot list nodes"
+		return
+	fi
+
+	echo "${b_nodes}" | jq -r '
+        .data
+        | sort_by(.node)
+        | .[]
+        | "    - \(.node) (\(.status)) cpu=\(.cpu // 0 | . * 100 | floor)% mem=\((.mem // 0) / 1073741824 | . * 10 | floor / 10)G/\((.maxmem // 0) / 1073741824 | . * 10 | floor / 10)G"
+    '
+}
+
+# ----------------------------------------
+# Section 5: Templates
+# ----------------------------------------
+fn_check_templates() {
+	fn_log_section "Templates"
+
+	if ! test -e ~/.config/proxmox-sh/current.env; then
+		fn_log_warn "skipping template checks - no current.env"
+		return
+	fi
+
+	# shellcheck disable=SC1090
+	. ~/.config/proxmox-sh/current.env || true
+
+	if test -z "${PROXMOX_HOST:-}" ||
+		test -z "${PROXMOX_TOKEN_ID:-}" ||
+		test -z "${PROXMOX_TOKEN_SECRET:-}"; then
+		fn_log_warn "skipping template checks - missing credentials"
+		return
+	fi
+
+	b_auth="Authorization: PVEAPIToken=${PROXMOX_TOKEN_ID}=${PROXMOX_TOKEN_SECRET}"
+	b_base_url="https://${PROXMOX_HOST}/api2/json"
+	b_curl="curl --max-time 10 --fail-with-body -sSL"
+	b_node="${PROXMOX_TARGET_NODE:-pve1}"
+	b_tmpl_storage="${PROXMOX_TEMPLATE_STORAGE:-}"
+
+	if test -z "${b_tmpl_storage}"; then
+		fn_log_warn "PROXMOX_TEMPLATE_STORAGE not set - cannot list templates"
+		return
+	fi
+
+	echo "  Available templates (${b_tmpl_storage}):"
+	if ! b_content="$(${b_curl} -H "${b_auth}" \
+		"${b_base_url}/nodes/${b_node}/storage/${b_tmpl_storage}/content?content=vztmpl" 2>&1)"; then
+		fn_log_warn "cannot list templates from ${b_tmpl_storage} on ${b_node}"
+		return
+	fi
+
+	echo "${b_content}" | jq -r '
+        .data
+        | sort_by(.volid)
+        | .[]
+        | "    - \(.volid) (\(.size // 0 | . / 1048576 | floor)MB)"
+    '
+
+	# Check if default template exists
+	if test -n "${PROXMOX_TEMPLATE_DEFAULT:-}"; then
+		b_default_match="$(echo "${b_content}" | jq -r --arg t "${PROXMOX_TEMPLATE_DEFAULT}" '
+            .data[] | select(.volid | endswith($t)) | .volid
+        ')"
+		if test -n "${b_default_match}"; then
+			fn_log_ok "default template '${PROXMOX_TEMPLATE_DEFAULT}' found"
+		else
+			fn_log_warn "default template '${PROXMOX_TEMPLATE_DEFAULT}' NOT found in ${b_tmpl_storage}"
+		fi
+	fi
+}
+
+# ----------------------------------------
+# Summary
+# ----------------------------------------
+fn_summary() {
+	fn_log_section "Summary"
+
+	if test "${g_exit_code}" -eq 0; then
+		echo "  All checks passed. Ready to use proxmox-sh."
+	elif test "${g_exit_code}" -eq 2; then
+		echo "  Passed with warnings. Review [WARN] items above."
+	else
+		echo "  FAILED. Fix [ERROR] items above before proceeding."
+	fi
+	echo ""
+}
+
+main() {
+	echo "proxmox-sh-doctor"
+	echo "================="
+
+	fn_check_deps
+	fn_check_proxmox_sh
+	fn_check_env_files
+	fn_check_api
+	fn_check_templates
+	fn_summary
+
+	return "${g_exit_code}"
+}
+
+main "$@"
