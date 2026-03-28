@@ -288,14 +288,24 @@ fn_summary() {
 	fi
 }
 
+fn_usage() {
+	echo "Usage: proxmox-sh-doctor"
+	echo ""
+	echo "Validates proxmox-sh environment: deps, install, env files, API, permissions."
+	echo "Exit codes: 0=pass, 1=error, 2=warning"
+}
+
 main() {
 	case "${1:-}" in
 	--help | -help | help)
-		echo "Usage: proxmox-sh-doctor"
-		echo ""
-		echo "Validates proxmox-sh environment: deps, install, env files, API, permissions."
-		echo "Exit codes: 0=pass, 1=error, 2=warning"
+		fn_usage
 		return 0
+		;;
+	-* | ?*)
+		echo "Unknown argument: ${1}" >&2
+		echo ""
+		fn_usage >&2
+		return 1
 		;;
 	esac
 

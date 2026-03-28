@@ -383,6 +383,14 @@ fn_list_templates() {
 # ----------------------------------------
 # Main
 # ----------------------------------------
+fn_usage() {
+	echo "Usage: proxmox-sh-resources [--fast]"
+	echo ""
+	echo "List Proxmox infrastructure: pools, storages, VMs, SDN, nodes, templates."
+	echo ""
+	echo "  --fast   3 API calls (permissions + VMs) instead of 8+"
+}
+
 main() {
 	while test -n "${1:-}"; do
 		case "${1}" in
@@ -390,13 +398,13 @@ main() {
 			g_fast=true
 			;;
 		--help | -help | help)
-			echo "Usage: proxmox-sh-resources [--fast]"
-			echo ""
-			echo "  --fast   3 API calls (permissions + VMs) instead of 8+"
+			fn_usage
 			return 0
 			;;
 		*)
 			echo "Unknown flag: ${1}" >&2
+			echo ""
+			fn_usage >&2
 			return 1
 			;;
 		esac
