@@ -289,6 +289,16 @@ fn_summary() {
 }
 
 main() {
+	case "${1:-}" in
+	--help | -help | help)
+		echo "Usage: proxmox-sh-doctor"
+		echo ""
+		echo "Validates proxmox-sh environment: deps, install, env files, API, permissions."
+		echo "Exit codes: 0=pass, 1=error, 2=warning"
+		return 0
+		;;
+	esac
+
 	echo "# proxmox-sh-doctor"
 
 	fn_check_deps

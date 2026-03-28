@@ -389,7 +389,7 @@ main() {
 		--fast)
 			g_fast=true
 			;;
-		--help | -h)
+		--help | -help | help)
 			echo "Usage: proxmox-sh-resources [--fast]"
 			echo ""
 			echo "  --fast   3 API calls (permissions + VMs) instead of 8+"
