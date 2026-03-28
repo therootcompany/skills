@@ -84,7 +84,8 @@ Host feat-foo.example.com
     ProxyCommand sclient --alpn ssh %h
 ```
 
-**proxmox-create** forces tty output -- handle or work around it.
+**proxmox-create** writes to `/dev/tty` which fails without a terminal.
+Wrap with expect: `expect -c 'spawn proxmox-create ...; expect eof'`
 See `proxmox-create-vm` sub-skill for flags, sizing, VMID/IP scheme.
 
 ## Quick Reference

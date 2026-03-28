@@ -37,14 +37,16 @@ proxmox-create <hostname> \
     --vcpus <n>
 ```
 
-### Step 3: User runs the command
+### Step 3: Run the command
 
-`proxmox-create` requires an interactive terminal (tty confirmation). The agent
-cannot run this directly. Tell the user the exact command and have them run it
-with the `!` prefix:
+`proxmox-create` writes progress to `/dev/tty`. Wrap with `expect` to
+provide a pty so the agent can run it directly:
 
-```
-! proxmox-create myhost --os vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst --storage 10 --ram 2048 --vcpus 2
+```sh
+expect -c 'spawn proxmox-create myhost \
+    --os vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst \
+    --storage 10 --ram 2048 --vcpus 2; \
+    expect eof'
 ```
 
 After creation, the output shows the assigned CTID, IP, and direct-IP domains.
