@@ -29,6 +29,13 @@ expect -c 'spawn proxmox-create <hostname> \
 
 Output shows the assigned CTID, IP, and direct-IP domains.
 
+## Container Layout
+
+- `/` (rootfs) -- 8 GB, fixed, from `PROXMOX_FS_POOL`
+- `/mnt/storage` -- `--storage` size, from `PROXMOX_DATA_POOL`
+
+The `--storage` flag sets `/mnt/storage` size, not rootfs.
+
 ## Standard Sizing
 
 | Tier | RAM | vCPU | Storage | Use case |
