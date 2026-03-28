@@ -6,41 +6,72 @@ description:
   runs the doctor script and points to focused sub-skills.
 ---
 
-## MUST: Respect Token Permissions
+## Startup Sequence
 
-The token's granted permissions are the guardrails. Before any operation, check
-`proxmox-sh-resources --fast` output to confirm the token has the required privileges.
+Run these three steps at the start of every Proxmox session, in order.
 
-- Advise the user when their token lacks permissions for the requested operation.
-- If a permission denial surprises you, investigate (e.g. node-level vs VM-level
-  scope, pool propagation) before concluding it's missing — but never bypass or
-  ignore what the token cannot do.
-- Reference `references/minimum-permissions.csv` for what each operation requires.
-
-## MUST: Run Doctor First
-
-MUST: Run `proxmox-sh-doctor` before any Proxmox operation. It validates dependencies,
-env files, API connectivity, and token permissions.
+### Step 1: MUST: Run Doctor
 
 ```sh
 sh ~/Agents/skills/proxmox/scripts/proxmox-sh-doctor
 ```
 
-If it fails, fix the errors before proceeding.
+If it fails with missing dependencies or broken env, fix the errors before
+proceeding. If the user has no working token yet, exit with clear instructions:
+what to install (`webi`, `jq`, etc.), how to create a profile
+(`proxmox-sh-init`, then edit the example), and how to get a token from their
+Proxmox admin.
 
-Then run `proxmox-sh-resources` to list infrastructure (pools, storages, VMs,
-SDN zones, nodes, templates). This output gives the agent everything it needs
-to make informed decisions in subsequent steps.
+Read the example env to understand expected fields:
+
+```sh
+cat ~/.local/opt/proxmox-sh/example.proxmox-sh.env
+```
+
+Use this to help the user create or migrate their profile. Fill in reasonable
+defaults from resources output where possible (e.g. pick the first available
+pool, storage, vnet from what the token can see).
+
+### Step 2: MUST: Scan All Tokens
+
+```sh
+sh ~/Agents/skills/proxmox/scripts/proxmox-sh-resources-all
+```
+
+This scans every profile in `~/.config/proxmox-sh/` (skipping `current.env`
+and `example.env`). Individual failures are fine as long as the doctor-checked
+profile succeeded. The output shows what each token can see: pools, storages,
+VMs, SDN zones, node grants.
+
+For a single profile or when using `--env` directly:
 
 ```sh
 sh ~/Agents/skills/proxmox/scripts/proxmox-sh-resources            # default: 3 API calls
 sh ~/Agents/skills/proxmox/scripts/proxmox-sh-resources --detail   # full: 8+ API calls
+sh ~/Agents/skills/proxmox/scripts/proxmox-sh-resources --env /path/to/file.env
 ```
 
-The default mode pulls pools, storages, SDN zones, and node grants from
-`/access/permissions` in a single call, then one call for VM names/status.
-Use this to inspect what each token can see. `--detail` adds node CPU/memory
-metrics, vnet details, pool member counts, and template listing.
+`--detail` adds node CPU/memory metrics, vnet details, pool member counts,
+and template listing.
+
+### Step 3: MUST: Confirm Account
+
+Ask the user which profile/account to use. If they already stated a clear
+preference, proceed without double-confirming. Use `env-switch` if needed:
+
+```sh
+env-switch proxmox-sh <profile-name>
+```
+
+## MUST: Respect Token Permissions
+
+The token's granted permissions are the guardrails.
+
+- Advise the user when their token lacks permissions for the requested operation.
+- If a permission denial surprises you, investigate (e.g. node-level vs VM-level
+  scope, pool propagation) before concluding it's missing -- but never bypass or
+  ignore what the token cannot do.
+- Reference `references/minimum-permissions.csv` for what each operation requires.
 
 ## Sub-skills
 
@@ -49,17 +80,61 @@ metrics, vnet details, pool member counts, and template listing.
 | `proxmox-create-vm` | Creating new LXC containers with proxmox-create |
 | `proxmox-dns` | DNS record management for VMs (uses domainpanel) |
 
-## Environment Profiles
+## Creating a VM: Pre-flight
 
-Profiles live in `~/.config/proxmox-sh/*.env`. Switch with:
+Before running `proxmox-create`, handle these in order.
 
-```sh
-env-switch proxmox-sh <profile-name>
+### OS Selection
+
+Pick the OS template based on the task:
+
+| Need | OS | Why |
+|------|----|-----|
+| systemd (most services) | Ubuntu | widest package support |
+| OpenRC / minimal | Alpine | smallest footprint |
+
+Flavor preference order: the user's own template if they have one, then `bnna`
+variants (e.g. `ubuntu-24.04-bnna`), then the standard/default template.
+
+### SSH Config (MUST get explicit permission)
+
+The user's `~/.ssh/config` needs a wildcard entry for the direct-IP domain
+before they can SSH into new VMs. **MUST ask for explicit permission before
+touching ~/.ssh/config.**
+
+Wildcard entry for the direct-IP domain:
+
+```
+Host *.vms.example.net
+    ProxyCommand sclient --alpn ssh %h
 ```
 
-This symlinks `current.env` to the selected profile. All proxmox-sh tools read from `current.env`.
+If the user wants a friendly CNAME (e.g. `feat-more-cowbell.whatever.com`
+pointing to `tls-10-11-xx-yy.vms.example.net`), they also need a host-specific
+entry:
 
-MUST: Ask the user which profile to use before running any Proxmox command.
+```
+Host feat-more-cowbell.whatever.com
+    Hostname tls-10-11-xx-yy.vms.example.net
+    ProxyCommand sclient --alpn ssh %h
+```
+
+You may offer to create the CNAME entry before or after VM creation.
+
+Ask the user if they want a friendly CNAME on their direct-IP domain, or if
+the `tls-10-11-xx-yy` domain is sufficient.
+
+### Running proxmox-create
+
+`proxmox-create` is interactive and forces some output to tty. The user must
+run it themselves with the `!` prefix:
+
+```
+! proxmox-create ...
+```
+
+See the `proxmox-create-vm` sub-skill for flags, sizing tiers, and VMID/IP
+assignment.
 
 ## Key Concepts
 
@@ -72,15 +147,17 @@ IP 10.11.4.209 -> tls-10-11-4-209.<DIRECT_IP_DOMAIN>  (HTTPS proxy to port 3080)
 IP 10.11.4.209 -> tcp-10-11-4-209.<DIRECT_IP_DOMAIN>  (raw TCP proxy to port 443)
 ```
 
-`DIRECT_IP_DOMAIN` comes from the active env profile (e.g. `vms.paperos.net`, `vms.coolaj86.com`).
+`DIRECT_IP_DOMAIN` comes from the active env profile (e.g. `vms.paperos.net`,
+`vms.coolaj86.com`).
 
 ### VMID Scheme
 
-VMIDs are `<PREFIX><3-digit-index>`: prefix `1104` + index `209` = VMID `1104209`, IP `10.11.4.209`.
+VMIDs are `<PREFIX><3-digit-index>`: prefix `1104` + index `209` = VMID
+`1104209`, IP `10.11.4.209`.
 
 ### Pool Conventions
 
-Look for these pool name patterns in the doctor output:
+Look for these pool name patterns in the resources output:
 
 | Pattern | Purpose |
 |---------|---------|
@@ -89,7 +166,10 @@ Look for these pool name patterns in the doctor output:
 | `*-prod` | Production instances |
 | `*-offline` | Stopped/archived containers |
 
-### Required ENV Variables
+### ENV Variables
+
+See `~/.local/opt/proxmox-sh/example.proxmox-sh.env` for the full reference
+with comments. Key fields:
 
 | Variable | Purpose |
 |----------|---------|
@@ -103,6 +183,9 @@ Look for these pool name patterns in the doctor output:
 | `PROXMOX_TEMPLATE_STORAGE` | Storage containing OS templates |
 | `PROXMOX_TEMPLATE_DEFAULT` | Default OS template |
 | `DIRECT_IP_DOMAIN` | Domain suffix for direct-IP access |
+| `PROXMOX_AUTHORIZED_KEYS` | URL, file path, or inline SSH public keys |
+| `PROXMOX_FS_POOL` | ZFS/Ceph pool for rootfs |
+| `PROXMOX_DATA_POOL` | ZFS/Ceph pool for data storage |
 
 ## proxmox-sh Tools
 
@@ -110,7 +193,7 @@ Installed at `~/.local/opt/proxmox-sh/`, tools in `bin/`:
 
 | Command | Purpose |
 |---------|---------|
-| `proxmox-create` | Create LXC containers (interactive - user must run) |
+| `proxmox-create` | Create LXC containers (interactive -- user must run) |
 | `env-switch` | Switch active environment profile |
 | `proxmox-sh-init` | Initialize config dirs and example files |
 | `proxmox-sh-update` | Git pull latest proxmox-sh |
@@ -123,6 +206,6 @@ setting up new tokens, or advising on what a tenant token can and cannot do.
 
 ## Related Skills
 
-- `paperos-new-instance-provision-vps-proxmox-cloudflare` - PaperOS-specific provisioning workflow (reference)
-- `paperos-new-instance-deploy-services` - Deploying services after VM creation
-- `paperos-new-team-member-onboarding-ssh` - SSH access setup
+- `paperos-new-instance-provision-vps-proxmox-cloudflare` -- PaperOS-specific provisioning workflow (reference)
+- `paperos-new-instance-deploy-services` -- Deploying services after VM creation
+- `paperos-new-team-member-onboarding-ssh` -- SSH access setup
