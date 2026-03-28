@@ -14,11 +14,23 @@ description:
 sh ~/Agents/skills/proxmox/scripts/proxmox-sh-doctor
 ```
 
-If it fails: read the example env for expected fields
-(`cat ~/.local/opt/proxmox-sh/example.proxmox-sh.env`), help the user fix
-their profile. Use resources output to fill reasonable defaults (first
-available pool, storage, vnet the token can see).
-If no working token exists, stop and explain what they need.
+If it fails: the user only needs to provide 4 values to get started:
+
+1. `PROXMOX_HOST` -- API endpoint (from their admin)
+2. `PROXMOX_TOKEN_ID` -- token identity (from their admin)
+3. `PROXMOX_TOKEN_SECRET` -- token secret (from their admin)
+4. `DIRECT_IP_DOMAIN` -- direct-IP domain suffix (from their admin)
+
+Everything else can be discovered. Create a minimal env file with these 4,
+then run env-defaults to fill in the rest:
+
+```sh
+sh ~/Agents/skills/proxmox/scripts/proxmox-sh-env-defaults --env <file>
+```
+
+It queries the API and prints `SUGGEST` lines for every missing variable
+(node, pool, vnet, template storage, default template, ID prefix).
+See `~/.local/opt/proxmox-sh/example.proxmox-sh.env` for the full field list.
 
 ### 2. Scan all tokens
 
@@ -70,12 +82,6 @@ If CNAME, also add a host-specific SSH entry:
 Host feat-foo.example.com
     Hostname tls-10-11-xx-yy.<DIRECT_IP_DOMAIN>
     ProxyCommand sclient --alpn ssh %h
-```
-
-**Next VMID:** Get the next available VMID and its IP:
-
-```sh
-sh ~/Agents/skills/proxmox/scripts/proxmox-sh-next-vmid
 ```
 
 **proxmox-create** forces tty output -- handle or work around it.
