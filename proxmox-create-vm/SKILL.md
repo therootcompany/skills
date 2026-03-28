@@ -14,9 +14,20 @@ grep -E 'PROXMOX_TEMPLATE_DEFAULT|PROXMOX_TARGET_NODE|PROXMOX_ID_PREFIX' \
     ~/.config/proxmox-sh/current.env
 ```
 
-### Step 2: Run the command
+### Step 2: Choose the OS template
 
-MUST: Always pass `--os` with the full `vztmpl/...` path from `PROXMOX_TEMPLATE_DEFAULT`.
+Default is `PROXMOX_TEMPLATE_DEFAULT` from the env. Override when the workload
+needs a different OS:
+
+- **systemd required** (most services) => Ubuntu
+- **OpenRC / minimal** (static sites, simple daemons) => Alpine
+- Prefer: user's own template > `bnna` variant > distro standard
+
+To see available templates, run `proxmox-sh-resources --detail` (templates section).
+
+### Step 3: Run the command
+
+MUST: Always pass `--os` with a full `vztmpl/...` path.
 
 Wrap with `expect` to provide a pty (`proxmox-create` writes to `/dev/tty`):
 
