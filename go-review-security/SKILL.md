@@ -113,6 +113,10 @@ Each reviewer agent gets a prompt like:
   Flag any 3rd-party import not listed there — requires explicit user approval.
 - NEVER: Load JavaScript, CSS, or fonts from CDNs (unpkg, jsdelivr, cdnjs, etc).
   Vendor all static assets locally and serve via `go:embed` or from disk.
+- MUST: 3rd-party dependencies (outside `github.com/therootcompany/golib`)
+  must have a published version at least 30 days old. New or unreleased
+  libraries haven't had time for community review. Requires explicit user
+  approval to use a younger dependency.
 - Check `go.mod` for unnecessary or abandoned dependencies
 - Check for known vulnerabilities (`govulncheck` or advisory databases)
 
