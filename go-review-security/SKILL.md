@@ -63,6 +63,9 @@ Each reviewer agent gets a prompt like:
 - XML external entity (XXE) injection in XML parsers
 
 ### Authentication and Secrets
+- MUST: Use `golib/auth` for authentication (`golib/auth/jwt` for JWT,
+  `golib/auth/csvauth` or `golib/auth/envauth` for API keys). See `go-auth` skill.
+- MUST: Use `golib/http/middleware` for HTTP auth middleware.
 - Hardcoded credentials or API keys
 - Secrets logged or included in error messages
 - Timing-safe comparison for tokens and keys
@@ -104,6 +107,14 @@ Each reviewer agent gets a prompt like:
 - Race conditions on shared state (maps, slices without mutex)
 - Context not propagated (no cancellation on SIGINT/SIGTERM)
 - Goroutine leaks (no shutdown mechanism)
+
+### Supply Chain and Dependencies
+- MUST: All Go dependencies must be from the approved stack in `go-stack`.
+  Flag any 3rd-party import not listed there — requires explicit user approval.
+- NEVER: Load JavaScript, CSS, or fonts from CDNs (unpkg, jsdelivr, cdnjs, etc).
+  Vendor all static assets locally and serve via `go:embed` or from disk.
+- Check `go.mod` for unnecessary or abandoned dependencies
+- Check for known vulnerabilities (`govulncheck` or advisory databases)
 
 ### Denial of Service
 - Unbounded allocations from untrusted input (large file uploads, huge JSON)
