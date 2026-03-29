@@ -14,8 +14,8 @@ MUST load before running the review:
 - `go` — error handling, config conventions, focused sub-skills index
 - `go-stack` — approved libraries, import paths, build commands
 
-Also load any sub-skills from the `go` and `shell-scripting` indexes that are
-relevant to the codebase under review (e.g., `go-sqlc`, `go-http-handlers`,
+PREFER: Also load sub-skills from the `go` and `shell-scripting` indexes that
+are relevant to the codebase under review (e.g., `go-sqlc`, `go-http-handlers`,
 `go-auth`, `shell-scripting`).
 
 ## Review Process
