@@ -117,6 +117,8 @@ Each reviewer agent gets a prompt like:
   must have a published version at least 30 days old. New or unreleased
   libraries haven't had time for community review. Requires explicit user
   approval to use a younger dependency.
+  Run `go run <skills-dir>/go-review-security/scripts/check-dep-age.go --dir <module-dir>`
+  to check all direct dependencies against proxy.golang.org publish dates.
 - Check `go.mod` for unnecessary or abandoned dependencies
 - Check for known vulnerabilities (`govulncheck` or advisory databases)
 
