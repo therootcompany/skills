@@ -54,6 +54,11 @@ Each reviewer agent gets a prompt like:
 ## What to Look For
 
 ### Architecture and Design
+- MUST: Design for replaceability over readability, and certainly over
+  changeability. Code that is easy to delete and rewrite from scratch is
+  better than code that is easy to modify in place. Small, decoupled
+  units with clear boundaries can be thrown away without ripple effects.
+  Large, tangled units that are "easy to read" still resist replacement.
 - God functions (>100 lines doing multiple concerns)
 - Untestable code (functions that require real infra to exercise)
 - Hidden dependencies (global state, implicit ordering, `time.Now()` in logic)
@@ -68,7 +73,11 @@ Each reviewer agent gets a prompt like:
 - Missing context propagation (no cancellation, no timeouts)
 
 ### Testability
-- Functions that call `time.Now()` — pass `now time.Time` instead
+- MUST: Functions must not call `time.Now()`, `time.Since()`, or other
+  ambient-state functions. Pass `now time.Time` as a parameter. Impure
+  functions that read the clock, the filesystem, or the network are
+  untestable without mocking — and mocking is the wrong fix. The right
+  fix is to make the function pure by passing the value in.
 - Functions that depend on pre-sorted input without enforcing it
 - Pure functions that could be tested but have no tests
 - Boundary conditions on thresholds (off-by-one, >=  vs >)
