@@ -14,6 +14,8 @@ description: Go project conventions — index of focused skills, error handling,
 | `go-db-migrations` | Database schema migrations |
 | `go-sqlc` | sqlc query design, code generation |
 | `go-import-sheet-data` | Google Sheets to CSV/TSV/ENV |
+| `go-review-style` | Code style/architecture review with named agents |
+| `go-review-security` | Security vulnerability review with named agents |
 
 ## Error Handling
 
