@@ -25,9 +25,23 @@ description: POSIX shell scripting conventions. Use when writing any shell scrip
   b_result=$(curl -sf "$url")
   ```
 
-  The rule: `$()` must be the entire value of an assignment (`b_x=$(cmd)`),
-  or used directly as a command argument — never embedded in a quoted string
-  (`b_x="prefix $(cmd)"`) where its exit code is discarded.
+  The rule: always assign first, then use the variable:
+
+  ```sh
+  # NEVER: inline substitution in a string
+  echo "Hello $(whoami)"
+
+  # NEVER: quoted assignment (exit code swallowed)
+  b_name="$(whoami)"
+
+  # ALWAYS: bare assignment, then use variable
+  b_name=$(whoami)
+  echo "Hello ${b_name}"
+  ```
+
+  `$()` must be the entire value of a bare assignment (`b_x=$(cmd)`).
+  Never embed it in a quoted string (`"prefix $(cmd)"`) where its exit
+  code is discarded.
 
 - NEVER: Use the `&&`/`||` pattern as a ternary. It is not `if/then/else` —
   if the `&&` command fails, the `||` command runs too:
@@ -50,9 +64,13 @@ description: POSIX shell scripting conventions. Use when writing any shell scrip
 
 ## Variable naming
 
+- MUST: `ALL_CAPS` is for exported environment variables ONLY (`PATH`, `HOME`, `WEBI_VERSION`).
+  NEVER use ALL_CAPS for script-local or function-local variables — those MUST use a lowercase prefix.
+- MUST: All script variables use a lowercase prefix to make scope obvious at a glance.
+
 | Prefix      | Scope / use                          | Example              |
 |-------------|--------------------------------------|----------------------|
-| `ALL_CAPS`  | Environment variables only           | `PATH`, `HOME`       |
+| `ALL_CAPS`  | Exported env vars only               | `PATH`, `HOME`       |
 | `g_`        | Global to the script (and sourced)   | `g_base_url`         |
 | `b_`        | Block-scoped (function, loop, cond)  | `b_count`            |
 | `a_`        | Function arguments                   | `a_email`            |
