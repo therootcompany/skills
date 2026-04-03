@@ -1,50 +1,46 @@
 ---
 name: go-sqlc
-description: sqlc query tooling for Go projects. Use when writing, updating, or debugging SQL queries managed by sqlc — including query design rules, batch variants, parameter syntax, type mappings, and regenerating code after query changes.
+description: sqlc query tooling for Go projects. Use when writing, updating, or debugging SQL queries managed by sqlc - including query design rules, batch variants, parameter syntax, type mappings, and regenerating code after query changes.
+tier: core
+max-tokens: 1200
 ---
+
+<!-- core -->
 
 ## Overview
 
-No inline SQL in Go code. All queries go through sqlc. Query files live in
-`db/queries/` (or similar). Generated code is ephemeral — never committed.
+MUST: No inline SQL in Go code. All queries go through sqlc. Query files live in
+`db/queries/` (or similar). Generated code is ephemeral - never committed.
 
 ## Regenerating after query changes
 
-After any change to query files:
+MUST: After any change to query files, regenerate before building or testing:
 
 ```sh
 sqlc generate
-# or if the project has a wrapper:
-./scripts/sqlc-generate
 ```
-
-Always regenerate before running tests or building.
 
 ## Query design rules
 
-- **No inline SQL in Go code.** All queries through sqlc. Tool/test queries get their
-  own dedicated SQL file.
-- **Always provide batch variants.** Any fetch by ID must also accept multiple IDs via
-  `= ANY(sqlc.arg('ids')::text[])` (PostgreSQL) or `IN (sqlc.slice('ids'))` (MariaDB/SQLite).
-- **Include the grouping column in batch queries.** SELECT must include the grouping key
-  (e.g. `resource_id`, `account_id`) so results can be partitioned client-side.
-- **Explicit column lists.** Prefer explicit columns over `SELECT *` / `RETURNING *` —
-  sqlc generates precise struct types and lets you omit internal-only columns from
-  return types.
+- MUST: No inline SQL in Go code. Tool/test queries get their own SQL file.
+- MUST: Batch variants for every fetch-by-ID. Use `IN (sqlc.slice('ids'))` (MariaDB)
+  or `= ANY(sqlc.arg('ids')::text[])` (PostgreSQL).
+- MUST: Include the grouping column in batch queries (e.g. `resource_id`) so
+  results can be partitioned client-side.
+- PREFER: Explicit column lists over `SELECT *` / `RETURNING *`.
 
 ## Parameter syntax
 
-Always use named parameters — never positional (`$1`, `$2`).
+MUST: Named parameters only - never positional (`$1`, `$2`).
 
 | Form | Use | DB |
 |------|-----|----|
 | `sqlc.arg('foo')` | required param | all |
 | `sqlc.narg('foo')` | nullable/optional param | all |
-| `= ANY(sqlc.arg('foos')::text[])` | required IN-list | PostgreSQL |
-| `= ANY(sqlc.narg('foos')::text[])` | nullable IN-list | PostgreSQL |
-| `sqlc.slice('foo')` | IN-list (expands to `IN (...)`) | MariaDB, SQLite |
+| `= ANY(sqlc.arg('ids')::text[])` | required IN-list | PostgreSQL |
+| `sqlc.slice('ids')` | IN-list | MariaDB, SQLite |
 
-Example using the optional `since` filter pattern:
+Optional filter pattern:
 
 ```sql
 -- name: FooAll :many
@@ -53,25 +49,21 @@ WHERE sqlc.narg('since') IS NULL OR updated_at >= sqlc.narg('since')
 ORDER BY updated_at ASC, id ASC;
 ```
 
-The generated Go param will be `sql.NullTime`.
-
 ## Query performance
 
-- **Never multi-JOIN for counting across tables.** LEFT JOINing N sub-resource tables
-  in one query creates a combinatorial explosion that times out on production. Use
-  **correlated subqueries** instead — one `(SELECT COUNT(*) ...)` per table — or
-  separate queries.
-- **First-write-wins for shared-key maps.** When multiple DB rows share a lookup key,
-  add `ORDER BY updated_at DESC, created_at DESC, id DESC` to the query and use
-  `if _, exists := m[key]; !exists { m[key] = val }` in Go — most-recently-updated
-  row wins deterministically.
-- **Study existing query patterns first.** Before writing a new aggregation query, look
-  at how similar queries in the codebase are structured. Prefer small, focused,
-  one-table-at-a-time queries over large cross-table JOINs.
+- NEVER: Multi-JOIN for counting across tables. Use correlated subqueries
+  `(SELECT COUNT(*) ...)` per table, or separate queries.
+- MUST: First-write-wins for shared-key maps. Add `ORDER BY updated_at DESC,
+  created_at DESC, id DESC` and use `if _, exists := m[key]; !exists { m[key] = val }`.
+- PREFER: IF writing a new aggregation query, THEN grep `SELECT.*COUNT` in
+  `db/queries/` and match the style of existing queries.
+
+<!-- /core -->
 
 ## Initialisms
 
-sqlc defaults to only `["id"]` as an initialism. Add others to match Go naming conventions — e.g. `dns_name` → `DNSName`, `base_url` → `BaseURL`:
+sqlc defaults to only `["id"]` as an initialism. Add others to match Go naming
+conventions - e.g. `dns_name` => `DNSName`, `base_url` => `BaseURL`:
 
 ```yaml
 # sqlc.yaml
@@ -100,7 +92,8 @@ gen:
 
 ## Type overrides
 
-Override the Go type sqlc generates for a DB column or type. Requires two entries when the column is nullable:
+Override the Go type sqlc generates for a DB column or type. Requires two
+entries when the column is nullable:
 
 ```yaml
 gen:
@@ -123,6 +116,22 @@ gen:
 ```
 
 `go_type` keys: `import`, `package`, `type`, `pointer` (use `*T`), `slice` (use `[]T`).
+
+## Schema migrations
+
+MUST: Use `sql-migrate` for schema changes — not raw `CREATE TABLE` in Go code.
+See the `go-db-migrations` skill for CLI usage and migration file conventions.
+
+sqlc reads migration files as schema source. Point `schema:` in `sqlc.yaml` at
+the same migrations directory:
+
+```yaml
+sql:
+  - schema: "db/migrations/"   # sql-migrate migration files
+    queries: "db/queries/"
+```
+
+After adding or changing a migration, run `sqlc generate` to regenerate Go types.
 
 ## PostgreSQL type mappings (pgx/v5)
 

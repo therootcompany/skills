@@ -26,6 +26,7 @@ import "github.com/therootcompany/golib/auth/csvauth"   // NOT "golib/auth/csvau
 | `github.com/therootcompany/golib/cmd/sql-migrate/v2` | DB migrations CLI |
 | `github.com/jszwec/csvutil` | TSV/CSV encoding |
 | `github.com/vearutop/statigz` | Embed static files |
+| `github.com/miekg/dns` | Low-level DNS |
 
 CLI tools: `csvauth`, `sql-migrate`, `gsheet2csv`, `gsheet2tsv`, `gsheet2env`.
 
@@ -68,13 +69,13 @@ Codegen directives live in Go source:
 
 ## Pre-commit
 
+Copy `scripts/golint` from this skill into the project's `scripts/` directory.
+It runs `go fmt`, `goimports`, `go fix`, and `go vet`, excluding sqlc-generated packages from vet.
+
 ```sh
 go generate ./...
-go fmt ./...
-goimports -w .
-go fix ./...
+./scripts/golint
 go test ./...
-go vet ./...
 ```
 
 ## Config

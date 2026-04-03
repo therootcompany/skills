@@ -17,6 +17,12 @@ description: Go project conventions — index of focused skills, error handling,
 | `go-review-style` | Code style/architecture review with named agents |
 | `go-review-security` | Security vulnerability review with named agents |
 
+## Project structure
+
+`./cmd/*` is for wiring: config, CLI flags, environment, routes, and server startup.
+For non-trivial commands and servers, private implementation details go in `./internal/`.
+If unsure whether something belongs in `cmd` or `internal`, ask.
+
 ## Error Handling
 
 ```go

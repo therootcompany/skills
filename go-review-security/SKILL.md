@@ -67,8 +67,24 @@ Each reviewer agent gets a prompt like:
   `golib/auth/csvauth` or `golib/auth/envauth` for API keys). See `go-auth` skill.
 - MUST: Use `golib/http/middleware` for HTTP auth middleware.
 - Hardcoded credentials or API keys
-- Secrets logged or included in error messages
-- Timing-safe comparison for tokens and keys
+- Secrets logged or included in error messages (including usernames in log lines)
+- MUST: Timing-safe comparison for tokens and keys — `subtle.ConstantTimeCompare`
+  leaks length via early return when slices differ in size. HMAC-SHA256 both sides
+  with a random key before comparing to guarantee fixed-length digests:
+  ```go
+  // subtle.ConstantTimeCompare([]byte(a), []byte(b)) -- WRONG, leaks length
+  func constantTimeEq(a, b string, key []byte) int {
+      ma := hmac.New(sha256.New, key)
+      ma.Write([]byte(a))
+      mb := hmac.New(sha256.New, key)
+      mb.Write([]byte(b))
+      return subtle.ConstantTimeCompare(ma.Sum(nil), mb.Sum(nil))
+  }
+  ```
+- MUST: Credentials passed as CLI flags are visible in `/proc/PID/cmdline`. Use
+  env vars or file paths, never `-password <literal>` flags.
+- MUST: Auth endpoints must rate-limit failures — disconnect or backoff after 3
+  failed attempts. Without this, timing-attack mitigations are less effective.
 - Session management (token lifetime, revocation)
 - Credential storage (plaintext vs hashed)
 
@@ -77,6 +93,18 @@ Each reviewer agent gets a prompt like:
 - Hardcoded IVs, nonces, or salts
 - Deprecated algorithms (MD5, SHA1 for security purposes)
 - TLS configuration (minimum version, cipher suites)
+
+### Protocol and State Machine
+- MUST: State machine zero values must not grant access. If states are `iota`
+  constants, ensure the zero value is a "not yet initialized" state, not a
+  "greeted" or "authenticated" state. A fresh struct's zero-value fields must
+  always represent the most restrictive state.
+- MUST: Server error responses must not echo internal details (file paths, stack
+  traces, handler error strings). Return a generic code (e.g., "550 Rejected")
+  and log the real error server-side.
+- MUST: State resets (e.g., after TLS upgrade) must clear all auth/privilege
+  flags explicitly, not rely on zero values. Defense in depth against future
+  refactors removing re-initialization steps.
 
 ### Network and HTTP
 - HTTP clients without timeouts (blocks forever on slow/dead upstream)
@@ -98,6 +126,10 @@ Each reviewer agent gets a prompt like:
 - Connection strings or credentials in code or logs
 
 ### Error Handling and Information Disclosure
+- MUST: Sentinel errors must use `errors.New`, not `fmt.Errorf` without `%w`.
+  `fmt.Errorf("msg")` creates a new value each call — `errors.Is` works by
+  accident (pointer equality on package-level var) but breaks if the var is
+  ever reassigned or wrapped. `errors.New` is explicit and correct.
 - Stack traces or internal paths leaked to clients
 - Detailed error messages that reveal system internals
 - Panic recovery missing in HTTP handlers
@@ -121,6 +153,48 @@ Each reviewer agent gets a prompt like:
   to check all direct dependencies against proxy.golang.org publish dates.
 - Check `go.mod` for unnecessary or abandoned dependencies
 - Check for known vulnerabilities (`govulncheck` or advisory databases)
+
+### Recursive Resource Budgets
+- MUST: Any recursive evaluation with a global resource limit must use a shared
+  counter (`*int` pointer or returned accumulator), not per-frame copies. Passing
+  `count+1` to children creates sibling-blind counters — each child starts from
+  the parent's snapshot, not the accumulated total across all branches.
+  *Example: SPF `include:` chains where 9 includes each spawn 9 more yields 81
+  DNS lookups against a limit of 10.*
+- MUST: Every operation that consumes the budgeted resource must
+  decrement/increment the counter — not just the obviously recursive ones. Leaf
+  operations (network calls, allocations, I/O) are easy to miss.
+  *Example: SPF `a:` and `mx:` mechanisms trigger DNS lookups but only `include:`
+  incremented the counter.*
+- MUST: Cap fan-out per operation independently of the global budget. A single
+  permitted operation that expands into unbounded sub-operations defeats the
+  global limit.
+  *Example: one `mx:` mechanism can return 50 MX records, each requiring an A
+  lookup — RFC 7208 §4.6.4 caps this at 10.*
+- MUST: When a protocol distinguishes inline directives (evaluated in sequence,
+  short-circuit on match) from deferred directives (evaluated only after all
+  inline directives complete), enforce that distinction. Processing deferred
+  directives inline changes evaluation order.
+  *Example: SPF `redirect=` is a modifier per RFC 7208 §6.1, not a mechanism.*
+- MUST: When reconstructing data for cryptographic verification, preserve ALL
+  original fields — including unknown or unhandled ones. Dropping fields changes
+  the hash input and causes valid signatures to fail.
+  *Example: DKIM tag reconstruction that drops `i=`, `x=`, `l=` tags.*
+- MUST: Size-guard untrusted input before expensive operations (hashing,
+  canonicalization, deserialization, regex). Unbounded input passed to buffer-
+  allocating operations is a memory exhaustion vector.
+
+### Identity and Classification
+- MUST: When classifying identifiers into organizational or administrative
+  groups, use an authoritative registry — not string heuristics. Heuristics break
+  on irregular structures and create exploitable false-positive alignments.
+  *Example: use the Public Suffix List (`golang.org/x/net/publicsuffix`) for
+  domain org-boundary extraction. Naive "last two labels" lets `evil.co.uk` align
+  with `victim.co.uk`.*
+- MUST: When a protocol defines a fallback path (secondary lookup, default value,
+  alternative resolution), implement it. Missing fallbacks silently produce "none"
+  results for inputs the fallback was designed to handle.
+  *Example: DMARC org-domain fallback per RFC 7489 §6.6.3.*
 
 ### Denial of Service
 - Unbounded allocations from untrusted input (large file uploads, huge JSON)
