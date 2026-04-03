@@ -125,6 +125,12 @@ First time doing something? Follow the skill steps manually. After it works,
 write the script. The skill then becomes an index: which scripts to run, what
 inputs to collect from the user.
 
+MUST: After completing a documented process or updating a procedure skill,
+review for scriptable steps. Any section with >3 sequential shell blocks for
+one operation is a candidate for extraction. The skill body should call the
+script in one line, not restate the commands inline. This applies both when
+writing new skills and when revisiting existing ones after a task.
+
 ### Scripts as agent context
 
 Scripts aren't just automation -- they're the agent's eyes. A script that
