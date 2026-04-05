@@ -1,6 +1,6 @@
 ---
 name: download-markdown
-description: Download webpages and convert to Markdown, or recursively download website sections. Use when saving documentation for offline use, converting HTML documentation to Markdown, archiving web content, or processing API documentation. Covers URL downloading, HTML conversion, recursive downloads, and markdown detection with Accept headers and .md extensions.
+description: Download webpages and convert to Markdown, or recursively download website sections. Use when saving documentation for offline use, converting HTML documentation to Markdown, archiving web content, or processing API documentation. Covers URL downloading, HTML conversion, recursive downloads, markdown detection, and splitting large files for context loading.
 ---
 
 # Download Markdown
@@ -24,6 +24,12 @@ Download webpages and convert to Markdown, or recursively download website secti
 
 # Convert downloaded HTML to Markdown
 ./scripts/html-to-markdown-recursive.cjs ./downloaded ./markdown-docs
+
+# View TOC of large markdown file
+./scripts/markdown-split.cjs --toc large-doc.md
+
+# Split large file for skill context loading
+./scripts/markdown-split.cjs --index large-doc.md ./references/
 ```
 
 ## Scripts
@@ -33,6 +39,7 @@ Download webpages and convert to Markdown, or recursively download website secti
 | `download-markdown.cjs` | Download single URL, convert to Markdown |
 | `html-to-markdown-recursive.cjs` | Convert existing HTML files to Markdown |
 | `website-download-recursive.sh` | Recursively download website with wget |
+| `markdown-split.cjs` | Split large Markdown into smaller reference files |
 
 ## Dependencies
 
@@ -226,6 +233,102 @@ After downloading with wget, convert to Markdown:
   ./markdown-docs
 ```
 
+## 4. Split Large Markdown for Context Loading
+
+Large markdown files (>20KB) can exceed context windows. Split them for progressive disclosure.
+
+### View TOC with Line Numbers
+
+```sh
+# See structure before splitting
+./scripts/markdown-split.cjs --toc large-api-doc.md
+```
+
+Output:
+```
+| Level | Line | Header |
+|-------|------|--------|
+| 1 | 1 | API Reference |
+| 2 | 15 | Authentication |
+| 2 | 89 | Users |
+| 3 | 95 | List Users |
+| 3 | 142 | Create User |
+...
+```
+
+### Split into Smaller Files
+
+```sh
+# Split on level-2 headers, create index
+./scripts/markdown-split.cjs --index --depth 2 large-api-doc.md ./api/
+
+# Flatten into numbered files
+./scripts/markdown-split.cjs --flatten large-guide.md ./guide/
+
+# Custom size limits
+./scripts/markdown-split.cjs --max-lines 300 --max-bytes 15000 large.md ./split/
+```
+
+### Options
+
+| Flag | Description |
+|------|-------------|
+| `--toc` | Output TOC with line numbers only |
+| `--index` | Create INDEX.md listing all splits |
+| `--depth N` | Header depth to split on (default: 2) |
+| `--max-lines N` | Target max lines per file (default: 500) |
+| `--max-bytes N` | Target max bytes per file (default: 20000) |
+| `--flatten` | Use flat numbered filenames |
+
+### Output Structure
+
+**Before splitting:**
+```
+large-api-doc.md  (150KB, 3000 lines)
+```
+
+**After splitting:**
+```
+api/
+├── INDEX.md
+├── authentication.md
+├── users.md
+├── projects.md
+└── webhooks.md
+```
+
+**INDEX.md:**
+```markdown
+# API Reference
+
+Split for progressive context loading. Read only what you need.
+
+| File | Header | Lines | Size |
+|------|--------|-------|------|
+| authentication.md | Authentication | 89 | 4.2KB |
+| users.md | Users | 245 | 12.1KB |
+| projects.md | Projects | 178 | 8.5KB |
+| webhooks.md | Webhooks | 112 | 5.8KB |
+```
+
+### Workflow: Download → Convert → Split
+
+```sh
+# 1. Download large documentation
+./scripts/website-download-recursive.sh \
+  --depth 3 \
+  https://docs.example.com/api \
+  ./downloaded
+
+# 2. Convert to single large markdown
+./scripts/html-to-markdown-recursive.cjs \
+  ./downloaded \
+  ./large-api.md
+
+# 3. Split for skill context loading
+./scripts/markdown-split.cjs --index ./large-api.md ./references/
+```
+
 ## Complete Workflow
 
 ### Archive Documentation Site (Smart Detection)
@@ -251,6 +354,9 @@ After downloading with wget, convert to Markdown:
   --frontmatter \
   ./nmi/html \
   ./nmi/markdown
+
+# 4. Split large files for context loading
+./scripts/markdown-split.cjs --index ./nmi/markdown/large-api.md ./nmi/references/
 ```
 
 ### API Reference Download
@@ -316,6 +422,15 @@ markdown-docs/
     └── getting-started.md
 ```
 
+**After Splitting:**
+```
+references/
+├── INDEX.md
+├── authentication.md
+├── users.md
+└── projects.md
+```
+
 ## Frontmatter
 
 With `--frontmatter`, generated files include:
@@ -374,10 +489,23 @@ Increase wait time:
 ./scripts/website-download-recursive.sh --wait 5 https://example.com/docs
 ```
 
+### Large files exceed context
+
+Split before loading into context:
+
+```sh
+# View structure
+./scripts/markdown-split.cjs --toc large-doc.md
+
+# Split into manageable chunks
+./scripts/markdown-split.cjs --index --max-lines 300 large-doc.md ./split/
+```
+
 ## Script Versions
 
-- `download-markdown.js`: 1.0.0
-- `html-to-markdown-recursive.js`: 1.0.0
+- `download-markdown.cjs`: 1.0.0
+- `html-to-markdown-recursive.cjs`: 1.0.0
 - `website-download-recursive.sh`: 1.0.0
+- `markdown-split.cjs`: 1.0.0
 
 Bump versions when updating scripts.
