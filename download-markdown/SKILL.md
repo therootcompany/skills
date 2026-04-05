@@ -26,10 +26,10 @@ Download webpages and convert to Markdown, or recursively download website secti
 ./scripts/html-to-markdown-recursive.cjs ./downloaded ./markdown-docs
 
 # View TOC of large markdown file
-./scripts/markdown-split.cjs --toc large-doc.md
+./scripts/markdown-split.mjs --toc large-doc.md
 
 # Split large file for skill context loading
-./scripts/markdown-split.cjs --index large-doc.md ./references/
+./scripts/markdown-split.mjs --index large-doc.md ./references/
 ```
 
 ## Scripts
@@ -39,7 +39,7 @@ Download webpages and convert to Markdown, or recursively download website secti
 | `download-markdown.cjs` | Download single URL, convert to Markdown |
 | `html-to-markdown-recursive.cjs` | Convert existing HTML files to Markdown |
 | `website-download-recursive.sh` | Recursively download website with wget |
-| `markdown-split.cjs` | Split large Markdown into smaller reference files |
+| `markdown-split.mjs` | Split large Markdown into smaller reference files |
 
 ## Dependencies
 
@@ -241,7 +241,7 @@ Large markdown files (>20KB) can exceed context windows. Split them for progress
 
 ```sh
 # See structure before splitting
-./scripts/markdown-split.cjs --toc large-api-doc.md
+./scripts/markdown-split.mjs --toc large-api-doc.md
 ```
 
 Output:
@@ -260,13 +260,13 @@ Output:
 
 ```sh
 # Split on level-2 headers, create index
-./scripts/markdown-split.cjs --index --depth 2 large-api-doc.md ./api/
+./scripts/markdown-split.mjs --index --depth 2 large-api-doc.md ./api/
 
 # Flatten into numbered files
-./scripts/markdown-split.cjs --flatten large-guide.md ./guide/
+./scripts/markdown-split.mjs --flatten large-guide.md ./guide/
 
 # Custom size limits
-./scripts/markdown-split.cjs --max-lines 300 --max-bytes 15000 large.md ./split/
+./scripts/markdown-split.mjs --max-lines 300 --max-bytes 15000 large.md ./split/
 ```
 
 ### Options
@@ -326,7 +326,7 @@ Split for progressive context loading. Read only what you need.
   ./large-api.md
 
 # 3. Split for skill context loading
-./scripts/markdown-split.cjs --index ./large-api.md ./references/
+./scripts/markdown-split.mjs --index ./large-api.md ./references/
 ```
 
 ## Complete Workflow
@@ -356,7 +356,7 @@ Split for progressive context loading. Read only what you need.
   ./nmi/markdown
 
 # 4. Split large files for context loading
-./scripts/markdown-split.cjs --index ./nmi/markdown/large-api.md ./nmi/references/
+./scripts/markdown-split.mjs --index ./nmi/markdown/large-api.md ./nmi/references/
 ```
 
 ### API Reference Download
@@ -495,10 +495,10 @@ Split before loading into context:
 
 ```sh
 # View structure
-./scripts/markdown-split.cjs --toc large-doc.md
+./scripts/markdown-split.mjs --toc large-doc.md
 
 # Split into manageable chunks
-./scripts/markdown-split.cjs --index --max-lines 300 large-doc.md ./split/
+./scripts/markdown-split.mjs --index --max-lines 300 large-doc.md ./split/
 ```
 
 ## Script Versions
@@ -506,6 +506,6 @@ Split before loading into context:
 - `download-markdown.cjs`: 1.0.0
 - `html-to-markdown-recursive.cjs`: 1.0.0
 - `website-download-recursive.sh`: 1.0.0
-- `markdown-split.cjs`: 1.0.0
+- `markdown-split.mjs`: 1.0.0
 
 Bump versions when updating scripts.

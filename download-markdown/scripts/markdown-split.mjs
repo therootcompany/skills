@@ -7,14 +7,18 @@
  * When updating this script, bump the version number above.
  */
 
-const fs = require('fs').promises;
-const path = require('path');
+import { promises as fs } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const VERSION = '1.0.0';
 
 function showHelp() {
     console.log(`
-Usage: markdown-split.cjs [OPTIONS] <input> [output-dir]
+Usage: markdown-split.mjs [OPTIONS] <input> [output-dir]
 
 Split large Markdown files into smaller reference files for skill context loading.
 
@@ -34,13 +38,13 @@ OPTIONS:
 
 EXAMPLES:
     # View TOC with line numbers
-    markdown-split.cjs --toc large-doc.md
+    markdown-split.mjs --toc large-doc.md
 
     # Split into directory
-    markdown-split.cjs --index large-doc.md ./references/
+    markdown-split.mjs --index large-doc.md ./references/
 
     # Split on level-1 headers, flatten filenames
-    markdown-split.cjs --depth 1 --flatten large-api.md ./api/
+    markdown-split.mjs --depth 1 --flatten large-api.md ./api/
 
 OUTPUT:
     Creates multiple .md files suitable for progressive context loading.
@@ -49,7 +53,7 @@ OUTPUT:
 }
 
 function showVersion() {
-    console.log(`markdown-split.cjs version ${VERSION}`);
+    console.log(`markdown-split.mjs version ${VERSION}`);
     console.log('Split large Markdown files for skill context loading');
 }
 
