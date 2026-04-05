@@ -145,7 +145,7 @@ overrides:
   go_type: { import: "database/sql", type: "Null[string]" }
 ```
 
-**Nullable types (pre-Go 1.22):** `sql.NullBool`, `sql.NullString`, `sql.NullInt64`, `sql.NullFloat64`, `sql.NullTime`. Use `sql.Null[T]` (Go 1.22+) for types without a legacy equivalent.
+**Nullable types (non-generic):** `sql.NullBool`, `sql.NullString`, `sql.NullInt64`, `sql.NullFloat64`, `sql.NullTime`. Use `sql.Null[T]` (Go 1.22+) for types without a non-generic equivalent.
 
 ## Schema migrations
 
