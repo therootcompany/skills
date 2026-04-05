@@ -117,6 +117,36 @@ gen:
 
 `go_type` keys: `import`, `package`, `type`, `pointer` (use `*T`), `slice` (use `[]T`).
 
+### Custom types (sql.Scanner/driver.Valuer)
+
+sqlc overrides work with any Go type implementing `sql.Scanner` and `driver.Valuer`. Use for JSONB, domain-specific types, or custom null handling.
+
+**Pattern:**
+```go
+type CustomType struct{ Data any }
+func (c *CustomType) Scan(value interface{}) error { /* read from DB */ }
+func (c CustomType) Value() (driver.Value, error) { /* write to DB */ }
+```
+
+**JSONB override:**
+```yaml
+overrides:
+  - db_type: "jsonb"
+    go_type: { import: "github.com/project/internal/types", type: "JSONB" }
+  - db_type: "jsonb"
+    nullable: true
+    go_type: { import: "github.com/project/internal/types", type: "JSONB", pointer: true }
+```
+
+**Nullable types (Go 1.22+):** `sql.Null[T]` works for any type.
+```yaml
+- db_type: "text"
+  nullable: true
+  go_type: { import: "database/sql", type: "Null[string]" }
+```
+
+**Nullable types (non-generic):** `sql.NullBool`, `sql.NullString`, `sql.NullInt64`, `sql.NullFloat64`, `sql.NullTime`. Use `sql.Null[T]` (Go 1.22+) for types without a non-generic equivalent.
+
 ## Schema migrations
 
 MUST: Use `sql-migrate` for schema changes — not raw `CREATE TABLE` in Go code.
@@ -141,3 +171,4 @@ After adding or changing a migration, run `sqlc generate` to regenerate Go types
 | `encode(col, 'hex')` | `string`           | Return BYTEA as hex string |
 | `TEXT[]`             | `[]string`         |                            |
 | `TIMESTAMP`          | `pgtype.Timestamp` |                            |
+| `JSONB`              | Custom `JSONB`     | Implements `Scanner/Valuer` |
