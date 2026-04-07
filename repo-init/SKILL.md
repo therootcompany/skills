@@ -1,6 +1,6 @@
 ---
 name: repo-init
-description: Agent repo initialization pattern. Use to initialize a repo for Agent assistance. Covers what to read, what LOCAL.md is, and how to split project knowledge between AGENTS.md and LOCAL.md.
+description: Agent repo initialization pattern. Use to initialize a repo for Agent assistance. Covers directory structure (AGENTS.md, LOCAL.md, agents/, skills/, docs/), session files, and how to split project knowledge.
 ---
 
 ## Session Start Sequence
@@ -8,7 +8,7 @@ description: Agent repo initialization pattern. Use to initialize a repo for Age
 1. Read `AGENTS.md` (committed) — architecture, gotchas, pre-commit, skills to load
 2. Read `LOCAL.md` (git ignored) if present — environment-specific context for this worktree
 3. As needed, load the skills found in ~/Agents/skills, or in the repo
-4. Create session files per global AGENTS.md: `TASKS.md`, `REVIEW.md`, `HANDOFF.md`, `SESSION.tmp.d/`
+4. Create session files in `./agents/`: `TASKS.md`, `REVIEW.md`, `HANDOFF.md`, and `tmp/` directory
 
 ## LOCAL.md
 
@@ -55,12 +55,33 @@ listing each skill and when to use it. This lets agents decide which skills to l
 without reading every SKILL.md body. See the global `~/Agents/skills/AGENTS.md` for
 the pattern.
 
+## Project Directory Structure
+
+Standard layout for agent-assisted projects:
+
+```
+/AGENTS.md          - Committed project conventions (architecture, gotchas, commands)
+/LOCAL.md           - Gitignored, environment-specific context (accounts, env files, deploy targets)
+/skills/           - Project-specific skills (e.g. sso-deploy/, sso-db-migrate/)
+/docs/              - Design decisions, architecture notes, ADRs (not obvious from code)
+/agents/TASKS.md    - Session task tracking (gitignored)
+/agents/REVIEW.md   - Questions needing feedback (gitignored)
+/agents/HANDOFF.md  - Context for next agent (gitignored)
+/agents/tmp/        - Temporary files, clones, scratch work (gitignored)
+```
+
+- `LOCAL.md` stays at root for discoverability
+- `skills/` at root (not in `agents/`) because skills are committed and shared
+- `docs/` for non-obvious context: design rationales, architecture decisions, mental models
+- `agents/` directory is ephemeral and gitignored — agents recreate it per session
+- For Go projects: `./agents/tmp/` is critical — Go rejects imports from `/tmp` or `/internal`
+
 ## .gitignore entries for every project
 
 ```
 LOCAL.md
-*.tmp
-*.tmp.d
-tmp
-agent-session.tmp.d
+agents/TASKS.md
+agents/REVIEW.md
+agents/HANDOFF.md
+agents/tmp/
 ```
