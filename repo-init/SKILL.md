@@ -83,5 +83,6 @@ LOCAL.md
 agents/TASKS.md
 agents/REVIEW.md
 agents/HANDOFF.md
+agents/ISSUES.md
 agents/tmp/
 ```
