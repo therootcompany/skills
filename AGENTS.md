@@ -40,7 +40,7 @@ before loading the full skill.
 | `go-db-migrations` | Database schema migrations |
 | `golang-sqlc` | sqlc query design, code generation |
 | `golang-import-sheet-data` | Google Sheets to CSV/TSV/ENV |
-| `use-modern-golang` | Modern Go syntax guidelines for a project's Go version |
+| `use-modern-go` | Modern Go syntax guidelines for a project's Go version |
 
 ## Web
 

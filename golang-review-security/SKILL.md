@@ -2,7 +2,7 @@
 name: golang-review-security
 description: Go security review. Use when auditing Go code for security vulnerabilities, unsafe patterns, and hardening opportunities. Spawns named reviewer agents that write findings to disk.
 depends:
-  - use-modern-golang
+  - use-modern-go
   - golang
   - golang-stack
 ---
@@ -10,7 +10,7 @@ depends:
 ## Prerequisites
 
 MUST load before running the review:
-- `use-modern-golang` — modern Go idioms and version features
+- `use-modern-go` — modern Go idioms and version features
 - `golang` — error handling, config conventions, focused sub-skills index
 - `golang-stack` — approved libraries, import paths, build commands
 

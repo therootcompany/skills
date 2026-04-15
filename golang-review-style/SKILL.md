@@ -2,7 +2,7 @@
 name: golang-review-style
 description: Go code style and architecture review. Use when reviewing Go code for code smells, testability, maintainability, and design issues. Spawns named reviewer agents that write findings to disk.
 depends:
-  - use-modern-golang
+  - use-modern-go
   - golang
   - golang-stack
 ---
@@ -10,7 +10,7 @@ depends:
 ## Prerequisites
 
 MUST load before running the review:
-- `use-modern-golang` — modern Go idioms and version features
+- `use-modern-go` — modern Go idioms and version features
 - `golang` — error handling, config conventions, focused sub-skills index
 - `golang-stack` — approved libraries, import paths, build commands
 
