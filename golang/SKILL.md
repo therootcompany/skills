@@ -58,7 +58,9 @@ var ErrInvalidClaim = errors.New("invalid claim")
 var ErrAfterExp    = fmt.Errorf("%w: exp: token expired", ErrInvalidClaim)
 
 return fmt.Errorf("store: lookup %s: %w", id, ErrNotFound)
-return errors.Join(errs...) // multi-error: collect, return once
+
+// Multi-error: collect during a loop, append a final wrap, return once.
+return errors.Join(append(errs, fmt.Errorf("exp: %w", ErrMissingClaim))...)
 ```
 
 Boundary mapping — store returns sentinels, handler maps them:
