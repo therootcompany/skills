@@ -1,5 +1,5 @@
 ---
-name: go-auth
+name: golang-auth
 description: golib auth modules (csvauth, envauth, jwt). Use when implementing HTTP authentication, API keys, or JWT handling.
 ---
 

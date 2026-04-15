@@ -1,5 +1,5 @@
 ---
-name: go-import-sheet-data
+name: golang-import-sheet-data
 description: Import Google Sheets as CSV, TSV, or ENV. Use when reading data from Google Sheets or converting spreadsheet data.
 ---
 

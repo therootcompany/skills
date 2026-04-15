@@ -1,7 +1,7 @@
 ---
 name: go-db-migrations
 description: Database schema migrations with sql-migrate CLI. Use when creating migrations, adding tables, altering columns, running up/down migrations, or initializing a migrations directory. Covers sql-migrate init, create, up, down, status, list, and sqlc integration.
-depends: [go-sqlc]
+depends: [golang-sqlc]
 ---
 
 <!-- core -->
@@ -170,5 +170,5 @@ sqlc parses all `.sql` files in the migrations directory and understands the sch
 
 ## Related Skills
 
-- `go-sqlc` - query design and code generation (reads migration files as schema)
-- `go-stack` - approved libraries and build commands
+- `golang-sqlc` - query design and code generation (reads migration files as schema)
+- `golang-stack` - approved libraries and build commands

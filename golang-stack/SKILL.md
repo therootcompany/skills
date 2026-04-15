@@ -1,5 +1,5 @@
 ---
-name: go-stack
+name: golang-stack
 description: Approved Go library stack, import conventions, version features, and build commands. Use when adding a dependency, choosing a library, or checking what Go version features are available.
 ---
 

@@ -32,15 +32,15 @@ before loading the full skill.
 
 | Skill | When to use |
 |-------|-------------|
-| `go` | Index skill - load first, points to the right sub-skill |
-| `go-stack` | Approved libraries, import paths, version features, build commands |
-| `go-http-handlers` | HTTP handlers, ServeMux routes, middleware |
-| `go-cli-flags` | CLI tools, flag.FlagSet, argument parsing |
-| `go-auth` | Authentication, API keys, JWT, csvauth |
+| `golang` | Index skill - load first, points to the right sub-skill |
+| `golang-stack` | Approved libraries, import paths, version features, build commands |
+| `golang-http-handlers` | HTTP handlers, ServeMux routes, middleware |
+| `golang-cli-flags` | CLI tools, flag.FlagSet, argument parsing |
+| `golang-auth` | Authentication, API keys, JWT, csvauth |
 | `go-db-migrations` | Database schema migrations |
-| `go-sqlc` | sqlc query design, code generation |
-| `go-import-sheet-data` | Google Sheets to CSV/TSV/ENV |
-| `use-modern-go` | Modern Go syntax guidelines for a project's Go version |
+| `golang-sqlc` | sqlc query design, code generation |
+| `golang-import-sheet-data` | Google Sheets to CSV/TSV/ENV |
+| `use-modern-golang` | Modern Go syntax guidelines for a project's Go version |
 
 ## Web
 

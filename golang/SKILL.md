@@ -1,21 +1,21 @@
 ---
-name: go
+name: golang
 description: Go project conventions — index of focused skills, error handling, and config rules. Load this first; it points to the right sub-skill for any Go task.
 ---
 
 ## Focused skills
 
-| Skill                  | When to use                                                        |
-| ---------------------- | ------------------------------------------------------------------ |
-| `go-stack`             | Approved libraries, import paths, version features, build commands |
-| `go-http-handlers`     | HTTP handlers, ServeMux routes, middleware                         |
-| `go-cli-flags`         | CLI tools, flag.FlagSet, argument parsing                          |
-| `go-auth`              | Authentication, API keys, JWT, csvauth                             |
-| `go-db-migrations`     | Database schema migrations                                         |
-| `go-sqlc`              | sqlc query design, code generation                                 |
-| `go-import-sheet-data` | Google Sheets to CSV/TSV/ENV                                       |
-| `go-review-style`      | Code style/architecture review with named agents                   |
-| `go-review-security`   | Security vulnerability review with named agents                    |
+| Skill                      | When to use                                                        |
+| -------------------------- | ------------------------------------------------------------------ |
+| `golang-stack`             | Approved libraries, import paths, version features, build commands |
+| `golang-http-handlers`     | HTTP handlers, ServeMux routes, middleware                         |
+| `golang-cli-flags`         | CLI tools, flag.FlagSet, argument parsing                          |
+| `golang-auth`              | Authentication, API keys, JWT, csvauth                             |
+| `go-db-migrations`         | Database schema migrations                                         |
+| `golang-sqlc`              | sqlc query design, code generation                                 |
+| `golang-import-sheet-data` | Google Sheets to CSV/TSV/ENV                                       |
+| `golang-review-style`      | Code style/architecture review with named agents                   |
+| `golang-review-security`   | Security vulnerability review with named agents                    |
 
 ## Project structure
 
@@ -36,7 +36,7 @@ If unsure whether something belongs in `cmd` or `internal`, ask.
 ## Pre-commit
 
 MUST: Run `scripts/golint` before every commit in Go projects. The script
-lives in `go-stack/scripts/golint` and handles monorepos (depth-first
+lives in `golang-stack/scripts/golint` and handles monorepos (depth-first
 `go.mod` walk with fmt, imports, fix, vet, tidy per module). Copy it into
 the project's `scripts/` directory.
 

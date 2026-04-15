@@ -1,5 +1,5 @@
 ---
-name: go-cli-flags
+name: golang-cli-flags
 description: CLI flag handling with flag.FlagSet. Use when writing command-line tools or parsing arguments.
 ---
 

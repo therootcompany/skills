@@ -1,22 +1,22 @@
 ---
-name: go-review-style
+name: golang-review-style
 description: Go code style and architecture review. Use when reviewing Go code for code smells, testability, maintainability, and design issues. Spawns named reviewer agents that write findings to disk.
 depends:
-  - use-modern-go
-  - go
-  - go-stack
+  - use-modern-golang
+  - golang
+  - golang-stack
 ---
 
 ## Prerequisites
 
 MUST load before running the review:
-- `use-modern-go` — modern Go idioms and version features
-- `go` — error handling, config conventions, focused sub-skills index
-- `go-stack` — approved libraries, import paths, build commands
+- `use-modern-golang` — modern Go idioms and version features
+- `golang` — error handling, config conventions, focused sub-skills index
+- `golang-stack` — approved libraries, import paths, build commands
 
-PREFER: Also load sub-skills from the `go` and `shell-scripting` indexes that
-are relevant to the codebase under review (e.g., `go-sqlc`, `go-http-handlers`,
-`go-cli-flags`, `shell-scripting`).
+PREFER: Also load sub-skills from the `golang` and `shell-scripting` indexes that
+are relevant to the codebase under review (e.g., `golang-sqlc`, `golang-http-handlers`,
+`golang-cli-flags`, `shell-scripting`).
 
 ## Review Process
 

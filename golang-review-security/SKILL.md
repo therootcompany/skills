@@ -1,22 +1,22 @@
 ---
-name: go-review-security
+name: golang-review-security
 description: Go security review. Use when auditing Go code for security vulnerabilities, unsafe patterns, and hardening opportunities. Spawns named reviewer agents that write findings to disk.
 depends:
-  - use-modern-go
-  - go
-  - go-stack
+  - use-modern-golang
+  - golang
+  - golang-stack
 ---
 
 ## Prerequisites
 
 MUST load before running the review:
-- `use-modern-go` — modern Go idioms and version features
-- `go` — error handling, config conventions, focused sub-skills index
-- `go-stack` — approved libraries, import paths, build commands
+- `use-modern-golang` — modern Go idioms and version features
+- `golang` — error handling, config conventions, focused sub-skills index
+- `golang-stack` — approved libraries, import paths, build commands
 
-PREFER: Also load sub-skills from the `go` and `shell-scripting` indexes that
-are relevant to the codebase under review (e.g., `go-sqlc`, `go-http-handlers`,
-`go-auth`, `shell-scripting`).
+PREFER: Also load sub-skills from the `golang` and `shell-scripting` indexes that
+are relevant to the codebase under review (e.g., `golang-sqlc`, `golang-http-handlers`,
+`golang-auth`, `shell-scripting`).
 
 ## Review Process
 
@@ -73,7 +73,7 @@ Each reviewer agent gets a prompt like:
   hidden inside handler internals. If reading the routing table doesn't show who
   can reach an endpoint, the auth is in the wrong place.
 - MUST: Use `golib/auth` for authentication (`golib/auth/jwt` for JWT,
-  `golib/auth/csvauth` or `golib/auth/envauth` for API keys). See `go-auth` skill.
+  `golib/auth/csvauth` or `golib/auth/envauth` for API keys). See `golang-auth` skill.
 - MUST: Use `golib/http/middleware` for HTTP auth middleware.
 - Hardcoded credentials or API keys
 - Secrets logged or included in error messages (including usernames in log lines)
@@ -159,7 +159,7 @@ Each reviewer agent gets a prompt like:
 - Goroutine leaks (no shutdown mechanism)
 
 ### Supply Chain and Dependencies
-- MUST: All Go dependencies must be from the approved stack in `go-stack`.
+- MUST: All Go dependencies must be from the approved stack in `golang-stack`.
   Flag any 3rd-party import not listed there — requires explicit user approval.
 - NEVER: Load JavaScript, CSS, or fonts from CDNs (unpkg, jsdelivr, cdnjs, etc).
   Vendor all static assets locally and serve via `go:embed` or from disk.
@@ -167,7 +167,7 @@ Each reviewer agent gets a prompt like:
   must have a published version at least 30 days old. New or unreleased
   libraries haven't had time for community review. Requires explicit user
   approval to use a younger dependency.
-  Run `go run <skills-dir>/go-review-security/scripts/check-dep-age.go --dir <module-dir>`
+  Run `go run <skills-dir>/golang-review-security/scripts/check-dep-age.go --dir <module-dir>`
   to check all direct dependencies against proxy.golang.org publish dates.
 - Check `go.mod` for unnecessary or abandoned dependencies
 - Check for known vulnerabilities (`govulncheck` or advisory databases)

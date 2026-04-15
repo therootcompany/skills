@@ -1,5 +1,5 @@
 ---
-name: go-http-handlers
+name: golang-http-handlers
 description: HTTP routing and middleware patterns. Use when writing handlers, ServeMux routes, or middleware chains.
 ---
 

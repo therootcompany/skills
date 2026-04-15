@@ -23,7 +23,7 @@ ln -s ~/path/to/project/skills/my-skill ~/Agents/skills/my-skill
 - Directory name = `name` field exactly
 - Lowercase, numbers, hyphens only (max 64 chars)
 - No leading/trailing/consecutive hyphens
-- Action-oriented: `go-sqlc`, `shell-scripting`, `create-skill`
+- Action-oriented: `golang-sqlc`, `shell-scripting`, `create-skill`
 - Project skills use project prefix: `paperos-create-new-api-sheets-csv`
 
 ## Frontmatter
@@ -57,7 +57,7 @@ description: Does X. Use when [trigger keywords]. Covers [scope].
 | `shell` | string | `bash` (default) or `powershell` for inline commands |
 | `tier` | string | `core` or `full` (default). Core = compressed version in `SKILL.core.md` |
 | `max-tokens` | int | Advisory token budget for core tier. Skill compiler validates |
-| `depends` | list | Skills this one assumes loaded, e.g. `[go-sqlc, go-stack]` |
+| `depends` | list | Skills this one assumes loaded, e.g. `[golang-sqlc, golang-stack]` |
 
 ### String substitutions (in skill body)
 
@@ -224,8 +224,8 @@ Points to focused sub-skills. Short, no procedures. Example: `go` skill.
 
 | Skill | When to use |
 |-------|-------------|
-| `go-http-handlers` | HTTP handlers, ServeMux routes, middleware |
-| `go-sqlc` | sqlc query design, code generation |
+| `golang-http-handlers` | HTTP handlers, ServeMux routes, middleware |
+| `golang-sqlc` | sqlc query design, code generation |
 ```
 
 ### Convention skill

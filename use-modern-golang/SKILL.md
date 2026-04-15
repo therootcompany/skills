@@ -1,5 +1,5 @@
 ---
-name: use-modern-go
+name: use-modern-golang
 description: Apply modern Go syntax guidelines based on project's Go version. Use when user ask for modern Go code guidelines.
 source: https://github.com/JetBrains/go-modern-guidelines/blob/main/claude/modern-go-guidelines/skills/use-modern-go/SKILL.md
 license: Apache-2.0
