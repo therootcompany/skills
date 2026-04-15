@@ -108,20 +108,17 @@ validator.Validate(nil, &claims, time.Now())
 
 ### Session JWTs — set `auth_time`, don't skip it
 
-`NewIDTokenValidator` requires `auth_time` by default (OIDC Core §2 —
-"when the End-User authenticated"). For a session cookie minted after
-an OIDC callback, `auth_time` and `iat` are **distinct**:
+`NewIDTokenValidator` requires `auth_time` by default (OIDC Core §2 — "when the End-User authenticated"). For a session cookie minted after an OIDC callback, `auth_time` and `iat` are **distinct**:
 
-| Claim | Meaning | When it changes |
-|---|---|---|
-| `auth_time` | When the user actually authenticated (IdP callback time) | Only on a fresh login |
-| `iat` | When this particular JWT was signed | Every re-issue / rotation |
+| Claim       | Meaning                                                | When it changes              |
+| ----------- | ------------------------------------------------------ | ---------------------------- |
+| `auth_time` | When the user actually authenticated (IdP callback)    | Only on a fresh login        |
+| `iat`       | When this JWT was signed                               | Every re-issue / rotation    |
 
-Carry `auth_time` forward from the callback into every subsequent
-session cookie for that login. This lets you:
+Carry `auth_time` forward from the callback into every subsequent session cookie for that login. Lets you:
+
 - Enforce `max_age` — force re-auth after N seconds since last real login.
-- Distinguish "cookie was rotated 5 minutes ago" from "user hasn't
-  logged in for 30 days" — same `iat`, very different `auth_time`.
+- Distinguish "cookie rotated 5 min ago" from "user hasn't logged in for 30 days" — same `iat`, very different `auth_time`.
 - Keep using `NewIDTokenValidator` unchanged.
 
 ```go
@@ -141,14 +138,9 @@ re-authenticated, only the cookie has.
 
 ## Application-level secret envelope (AES-256-GCM)
 
-When you need secrets-at-rest without a KMS (self-hosted VMs, zero-ops
-posture): store ciphertext in a DB column, keep the key in an env var.
-The storage layer holds opaque `[]byte` — only the handler layer owns
-the key.
+For secrets-at-rest without a KMS (self-hosted VMs, zero-ops posture): store ciphertext in a DB column, keep the key in an env var. The storage layer holds opaque `[]byte`; only the handler layer owns the key.
 
-Layout on disk: `[12-byte nonce][ciphertext][16-byte GCM tag]`.
-`cipher.AEAD.Seal` produces exactly this when you pass the nonce as
-the `dst` argument.
+Layout on disk: `[12-byte nonce][ciphertext][16-byte GCM tag]`. `cipher.AEAD.Seal` produces exactly this when you pass the nonce as the `dst` argument.
 
 ```go
 func (s *Server) encryptSecret(plaintext []byte) ([]byte, error) {
@@ -168,15 +160,11 @@ func (s *Server) decryptSecret(env []byte) ([]byte, error) {
 ```
 
 Rules:
+
 - MUST: 32-byte key (AES-256). Hex-encoded in the env var is fine.
-- MUST: Decrypt returns ONE sentinel error for all cipher failures —
-  do not distinguish "too short" from "tag mismatch" (oracle).
-- MUST: Zero the plaintext with `for i := range pt { pt[i] = 0 }`
-  as soon as it's no longer needed. Go won't reuse the backing array
-  but the next GC cycle might not run soon.
-- NEVER: Store the key in the same row / file / backup as the
-  ciphertext. Env var or KMS only.
-- Key rotation: decrypt-with-old + re-encrypt-with-new sweep. Support
-  two keys via a `[]byte` list if rotation is ongoing.
+- MUST: Decrypt returns ONE sentinel error for every cipher failure. Don't distinguish "too short" from "tag mismatch" — that's a padding oracle.
+- MUST: Zero the plaintext (`for i := range pt { pt[i] = 0 }`) as soon as it's no longer needed. Go won't reuse the backing array, and the next GC cycle may not run soon — secrets sit in heap until then.
+- NEVER: Store the key in the same row, file, or backup as the ciphertext. Env var or KMS only.
+- Key rotation: decrypt-with-old + re-encrypt-with-new sweep. Support two keys via a `[]byte` list during rotation.
 
 See `~/Agents/skills/golang/references/examples/` for full `auth_example.go`, `envauth_example.go`, `jwt_example.go`.

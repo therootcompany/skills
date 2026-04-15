@@ -89,43 +89,42 @@ Pattern: `[What it does]. Use when [trigger conditions]. Covers [specific topics
 
 ### Context budget
 
-Skills share context with script output, conversation, sub-skills. Target 32k total; aim for 16k where easy. Nail correctness first, then scale down — never sacrifice correctness for size.
+Skills share context with script output, conversation, sub-skills. Target 32k total; 16k where easy. Nail correctness first, then scale down — never trade correctness for size.
 
-Guidelines:
 - **Index skills lean** (~1-3k chars). Sub-skills load on demand.
 - **Don't duplicate script output.** Doctor script prints env vars? Don't list them in a skill table too.
 - **Don't duplicate reference files.** Say "MUST read `references/foo.csv` when [trigger]" — don't summarize inline.
-- **Cut redundancy, not information.** Content only in skill body (SSH config, decision logic, flag requirements) stays. Duplicates of example files or script output go.
+- **Cut redundancy, not information.** Content unique to the skill body (SSH config, decision logic, flag requirements) stays. Duplicates of example files or script output go.
 
 ### Tools over instructions
 
-Once a procedure is proven (done manually, works reliably), extract mechanical steps into scripts. Models call scripts, not re-interpret procedures.
+Once a procedure is proven (done manually, works reliably), extract the mechanical steps into scripts. Models call scripts; they don't re-interpret procedures.
 
-| Step is... | Put it in... | Skill says... |
-|------------|--------------|---------------|
-| Mechanical (fixed commands, no judgment) | Shell script in `scripts/` | `./scripts/deploy-foo.sh <host>` |
-| Requires judgment (values, asking user) | Skill body | Describe what to decide and why |
-| Both | Script for mechanical, skill for decision | "Ask user for X, then run `./scripts/foo.sh <host> X`" |
+| Step is...                              | Put it in...                       | Skill says...                                       |
+| --------------------------------------- | ---------------------------------- | --------------------------------------------------- |
+| Mechanical (fixed commands, no choices) | Shell script in `scripts/`         | `./scripts/deploy-foo.sh <host>`                    |
+| Requires judgment (values, ask user)    | Skill body                         | Describe what to decide and why                     |
+| Both                                    | Script for mechanical, skill for decision | "Ask user for X, then run `./scripts/foo.sh <host> X`" |
 
-First time? Follow skill steps manually. After it works, write the script. Skill becomes an index: which scripts to run, what inputs to collect.
+First time? Follow steps manually. After it works, write the script. Skill becomes an index: which scripts to run, what inputs to collect.
 
-MUST: After completing a documented process or updating a procedure skill, review for scriptable steps. Any section with >3 sequential shell blocks for one operation is an extraction candidate. Skill body calls script in one line, not restating commands inline. Applies to new skills and revisiting existing ones.
+MUST: After completing a documented process or updating a procedure skill, scan for scriptable steps. Any section with >3 sequential shell blocks for one operation is an extraction candidate. Skill body calls the script in one line — not restating commands inline. Applies to new skills and to revisits.
 
 ### Scripts as agent context
 
-Scripts aren't just automation — they're the agent's eyes. A script querying an API and printing structured output (TSV, `key\tvalue`, `# section` headers, `OK:`/`WARN:`/`ERROR:` prefixes) gives a smaller agent the context to make informed decisions without exploring the API itself.
+Scripts are the agent's eyes. A script that queries an API and prints structured output (TSV, `key\tvalue`, `# section` headers, `OK:`/`WARN:`/`ERROR:` prefixes) lets a smaller agent make informed decisions without exploring the API itself.
 
-Design script output for the consuming agent:
-- Dense and parseable, not verbose and human-friendly
-- `--help` prints usage on bad args (agent doesn't need an extra call)
-- Flags like `--detail` for more context only when needed
-- Colored summary at end for humans, structured body for agents
+Design output for the consuming agent:
+- Dense and parseable, not verbose human-friendly prose.
+- `--help` prints usage on bad args (no extra call needed).
+- Optional `--detail` flag for more context only when asked.
+- Colored summary at end for humans; structured body for agents.
 
-The agent runs scripts directly. Escalate to user only on genuine roadblocks (interactive prompts, missing credentials, permission decisions).
+Agent runs scripts directly. Escalate to user only on real roadblocks: interactive prompts, missing credentials, permission decisions.
 
 ### Failure behavior
 
-MUST: Skills should instruct the model to STOP and ask the user when something unexpected happens. Models waste tokens and cause damage improvising around failures.
+MUST: Skills must tell the model to STOP and ask the user when something unexpected happens. Improvising around failures wastes tokens and causes damage.
 
 ```markdown
 NEVER: Re-implement script steps inline. If a script fails, STOP and ask the user.

@@ -14,34 +14,22 @@ description: POSIX shell scripting conventions. Use when writing any .sh file, n
 
 ## Subshells and error handling
 
-- NEVER: Use command substitution inside strings where `set -e` cannot catch
-  failures. A subshell in a string assignment silently swallows errors:
+- NEVER: Use command substitution inside a quoted string. The exit code is
+  swallowed and `set -e` cannot catch the failure. Assign first, then use:
 
   ```sh
-  # BAD: if curl fails, b_result is empty, script continues
+  # NEVER — inline in a string, or quoted assignment (both swallow exit code)
+  echo "Hello $(whoami)"
+  b_name="$(whoami)"
   b_result="$(curl -sf "$url")"
 
-  # GOOD: set -e catches the failure because the subshell is the whole command
-  b_result=$(curl -sf "$url")
-  ```
-
-  The rule: always assign first, then use the variable:
-
-  ```sh
-  # NEVER: inline substitution in a string
-  echo "Hello $(whoami)"
-
-  # NEVER: quoted assignment (exit code swallowed)
-  b_name="$(whoami)"
-
-  # ALWAYS: bare assignment, then use variable
+  # ALWAYS — bare assignment, then use the variable
   b_name=$(whoami)
   echo "Hello ${b_name}"
   ```
 
-  `$()` must be the entire value of a bare assignment (`b_x=$(cmd)`).
-  Never embed it in a quoted string (`"prefix $(cmd)"`) where its exit
-  code is discarded.
+  Rule: `$()` must be the entire value of a bare assignment (`b_x=$(cmd)`).
+  Never embed it in a quoted string.
 
 - NEVER: Use the `&&`/`||` pattern as a ternary. It is not `if/then/else` —
   if the `&&` command fails, the `||` command runs too:
@@ -58,9 +46,9 @@ description: POSIX shell scripting conventions. Use when writing any .sh file, n
   fi
   ```
 
-  The `cmd || fallback` pattern is fine when `cmd` is a single simple command
-  (like `command -v ... || go install ...`), but chaining `&&` and `||`
-  together creates a false ternary that breaks under `set -e`.
+  `cmd || fallback` alone is fine when `cmd` is a single simple command
+  (e.g. `command -v ... || go install ...`). Chaining `&&` with `||` creates
+  the false ternary that breaks under `set -e`.
 
 ## Variable naming
 

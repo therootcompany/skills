@@ -14,14 +14,11 @@ mux.HandleFunc("GET /api/items/{id}", handleGetItem)
 mux.HandleFunc("POST /api/items", handleCreateItem)
 ```
 
-### Enumerate methods — do NOT leave the method blank
+### Enumerate methods — never leave the method blank
 
 MUST: Always prefix the pattern with the method (`GET /foo`, `POST /foo`).
 
-A pattern without a method matches **every** method — including ones
-you didn't intend to handle. `mux.HandleFunc("/api/items", h)` catches
-GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS. You almost never want
-that. Enumerate the verbs you actually accept:
+A pattern without a method matches **every** method — including ones you didn't intend to handle. `mux.HandleFunc("/api/items", h)` catches GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS. Enumerate the verbs you actually accept:
 
 ```go
 // ✓ One handler per (method, path) — the mux 405s everything else.
@@ -198,9 +195,7 @@ mux.Handle("GET /assets/", http.StripPrefix("/assets/",
 
 ### Host-aware serving (multi-portal on one origin)
 
-When one server hosts multiple web surfaces that share common assets
-(e.g. tenant portal + operator portal, both using the same CSS/JS),
-split the static tree into three filesystems:
+When one server hosts multiple web surfaces sharing common assets (tenant + operator portal, same CSS/JS), split the static tree into three filesystems:
 
 ```
 web/
@@ -211,15 +206,10 @@ web/
 
 Two routing rules, one composition primitive:
 
-1. **Host-independent shared assets** — `GET /lib/*` serves directly
-   from the lib FS. One browser cache entry across all portals on the
-   origin, no per-request host lookup.
-2. **Host-aware per-portal pages** — `GET /portal/*` dispatches to
-   tenant or operator FS based on a request-bound host → tenant
-   resolution.
+1. **Shared assets, host-independent** — `GET /lib/*` serves directly from the lib FS. One browser cache entry across all portals, no per-request host lookup.
+2. **Per-portal pages, host-aware** — `GET /portal/*` dispatches to tenant or operator FS based on a request-bound host → tenant resolution.
 
-Compose shared assets under each per-portal FS with a small overlay
-so portal HTML can `<link href="/lib/css/portal.css">` and Just Work:
+Overlay the shared assets under each per-portal FS so portal HTML can `<link href="/lib/css/portal.css">` and just work:
 
 ```go
 // MountedFS overlays Mount under Prefix of Base. Mount wins on

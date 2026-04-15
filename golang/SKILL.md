@@ -20,19 +20,15 @@ description: Go project conventions index — points to the right sub-skill for 
 
 ## Project structure
 
-`./cmd/*` is for wiring: config, CLI flags, environment, routes, and server startup.
-For non-trivial commands and servers, private implementation details go in `./internal/`.
-If unsure whether something belongs in `cmd` or `internal`, ask.
+- `./cmd/*` — wiring only: config, CLI flags, environment, routes, server startup.
+- `./internal/` — private implementation details for non-trivial commands and servers.
+- Unsure whether something belongs in `cmd` or `internal`? Ask.
 
 ## Package naming
 
-- MUST: Directory name matches the `package` declaration. If the package is
-  `mcpauth`, the directory is `mcpauth/`, not `auth/`.
-- PREFER: Stutter in the import path over requiring an import alias.
-  `"…/mcptools/mcpauth"` is better than `mcpauth "…/mcptools/auth"`.
-- Aliases hide the real package name from the import path, making code harder
-  to navigate and grep. A reader should be able to find the package directory
-  from the import path alone.
+- MUST: Directory name matches the `package` declaration. Package `mcpauth` → directory `mcpauth/`, not `auth/`.
+- PREFER: Stutter in the import path over an import alias. `"…/mcptools/mcpauth"` beats `mcpauth "…/mcptools/auth"`.
+- Aliases hide the real package name from the import path, making code harder to navigate and grep. A reader must locate the package directory from the import path alone.
 
 ## Pre-commit
 
@@ -80,28 +76,20 @@ default:
 
 ### Context propagation
 
-MUST: Every function that performs I/O (DB, HTTP, file, network) takes
-`ctx context.Context` as its first parameter. No exceptions for "just
-a small helper" — callers must be able to cancel.
+MUST: Every function performing I/O (DB, HTTP, file, network) takes `ctx context.Context` as its first parameter. No exceptions for "just a small helper" — callers must be able to cancel.
 
 - HTTP handlers: pass `r.Context()` into every downstream call.
-- Workers/pollers: the ctx that runs the loop.
-- `main`: build a root ctx with `signal.NotifyContext(context.Background(),
-  os.Interrupt, syscall.SIGTERM)` and thread it down. This is what makes
-  Ctrl-C / SIGTERM cancel in-flight work instead of blocking shutdown.
-- NEVER use `context.Background()` inside a library method — accept the
-  caller's ctx. Break the chain and you lose request timeouts, tracing,
-  and cancellation in one move.
+- Workers/pollers: the ctx that drives the loop.
+- `main`: build a root ctx with `signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)` and thread it down. That's what makes Ctrl-C / SIGTERM cancel in-flight work instead of blocking shutdown.
+- NEVER use `context.Background()` inside a library method — accept the caller's ctx. Break the chain and you lose request timeouts, tracing, and cancellation in one move.
 
-Store interfaces must be `CreateFoo(ctx context.Context, …) error`, not
-`CreateFoo(…) error`. This is a load-bearing signature — a package that
-omits ctx forces every caller to forfeit cancellation.
+Store interfaces must be `CreateFoo(ctx context.Context, …) error`, not `CreateFoo(…) error`. Load-bearing signature — a package that omits ctx forces every caller to forfeit cancellation.
 
 ## Config
 
-- No YAML unless required by 3rd party
-- POSIX .env for ENVs
-- TSV for data exports
+- NEVER YAML unless required by a 3rd-party tool.
+- POSIX `.env` for environment variables.
+- TSV for data exports.
 
 ## Example files
 
