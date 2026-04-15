@@ -55,14 +55,23 @@ Each reviewer agent gets a prompt like:
 ## What to Look For
 
 ### Input Validation and Injection
+- SQL injection via identifier concatenation (not just values):
+  - MUST: Validate dynamic identifiers (table names, schema names, column names) against a strict pattern before concatenation. `SET search_path TO `+schemaName` is injectable even though `schemaName` came from a DB query — admin compromise or app bug can poison it.
+  - Pattern: `^tenant_[a-f0-9\-]{36}$` for schema names, `^[a-z_][a-z0-9_]*$` for table names
+  - Prefer parameterized identifiers via pgx when available, but always validate first
 - SQL injection (parameterized queries vs string concatenation)
 - Command injection (shell commands built from user input)
 - Path traversal (user-controlled paths without validation)
 - XSS (user data rendered into HTML without escaping)
 - SSRF (user-controlled URLs in outbound HTTP calls)
 - XML external entity (XXE) injection in XML parsers
+- Open redirect (OAuth `redirect_uri` must be validated against registered URIs for the client, not just checked for presence)
 
 ### Authentication and Secrets
+- MUST: Enforce auth at the boundary that owns it, visible in the routing table.
+  Access control on an endpoint must appear as middleware in the HTTP mux — never
+  hidden inside handler internals. If reading the routing table doesn't show who
+  can reach an endpoint, the auth is in the wrong place.
 - MUST: Use `golib/auth` for authentication (`golib/auth/jwt` for JWT,
   `golib/auth/csvauth` or `golib/auth/envauth` for API keys). See `go-auth` skill.
 - MUST: Use `golib/http/middleware` for HTTP auth middleware.
@@ -94,17 +103,18 @@ Each reviewer agent gets a prompt like:
 - Deprecated algorithms (MD5, SHA1 for security purposes)
 - TLS configuration (minimum version, cipher suites)
 
-### Protocol and State Machine
+### OAuth and State Machine Security
 - MUST: State machine zero values must not grant access. If states are `iota`
   constants, ensure the zero value is a "not yet initialized" state, not a
   "greeted" or "authenticated" state. A fresh struct's zero-value fields must
   always represent the most restrictive state.
-- MUST: Server error responses must not echo internal details (file paths, stack
-  traces, handler error strings). Return a generic code (e.g., "550 Rejected")
-  and log the real error server-side.
 - MUST: State resets (e.g., after TLS upgrade) must clear all auth/privilege
   flags explicitly, not rely on zero values. Defense in depth against future
   refactors removing re-initialization steps.
+- MUST: OAuth `redirect_uri` validation — match against registered URIs for the client, not just presence check. Attacker-controlled `redirect_uri` allows authorization code theft.
+- MUST: Authorization code race condition mitigation — use atomic UPDATE with `WHERE used=false` instead of separate GET and UPDATE. Concurrent requests with same code should fail the second one.
+- MUST: PKCE is required for public clients (browser apps, native apps). Authorization code flow without PKCE on public clients is vulnerable to code interception.
+- Session validation must return distinct errors for "not found" vs "database error" — zero-value returns make debugging impossible
 
 ### Network and HTTP
 - HTTP clients without timeouts (blocks forever on slow/dead upstream)
@@ -122,14 +132,22 @@ Each reviewer agent gets a prompt like:
 ### Database and Persistence
 - Transactions missing where atomicity is required (partial writes)
 - Row-level locking missing on read-modify-write patterns
+- Race conditions on single-use tokens/authorization codes — MUST use atomic `UPDATE ... WHERE used=false RETURNING *` instead of SELECT-then-UPDATE. The latter allows concurrent requests to both see `used=false`, both pass validation, and both mark used after use.
 - Sensitive data stored unencrypted
 - Connection strings or credentials in code or logs
+- Context propagation — database operations MUST use the request context, not `context.Background()`. Middleware sets timeouts, propagates tracing IDs, enables cancellation on SIGTERM. Breaking the context chain loses all of these.
 
 ### Error Handling and Information Disclosure
 - MUST: Sentinel errors must use `errors.New`, not `fmt.Errorf` without `%w`.
   `fmt.Errorf("msg")` creates a new value each call — `errors.Is` works by
   accident (pointer equality on package-level var) but breaks if the var is
   ever reassigned or wrapped. `errors.New` is explicit and correct.
+- MUST: Errors must be surgical enough to diagnose issues without exposing sensitive data:
+  - ✓ `ErrTenantNotFound`, `ErrSessionExpired` — specific enough for debugging, no secrets
+  - ✗ `"database unavailable"` — too vague, doesn't distinguish connection timeout from query error
+  - ✗ `fmt.Errorf("failed to connect to %s:%d", dbHost, dbPort)` — exposes infrastructure
+  - Pattern: Return sentinel errors for business logic states, wrap internal errors in generic messages for clients
+  - HTTP handlers: Map sentinel errors to appropriate status codes, return generic messages for unexpected errors
 - Stack traces or internal paths leaked to clients
 - Detailed error messages that reveal system internals
 - Panic recovery missing in HTTP handlers

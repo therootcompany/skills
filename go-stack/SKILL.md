@@ -69,8 +69,11 @@ Codegen directives live in Go source:
 
 ## Pre-commit
 
+MUST: Run `scripts/golint` before every commit. It walks all `go.mod` files
+depth-first and runs `go fmt`, `goimports`, `go fix`, `go vet`, and `go mod tidy`
+in each module. Monorepo-aware: leaf modules lint before their dependents.
+
 Copy `scripts/golint` from this skill into the project's `scripts/` directory.
-It runs `go fmt`, `goimports`, `go fix`, and `go vet`, excluding sqlc-generated packages from vet.
 
 ```sh
 go generate ./...

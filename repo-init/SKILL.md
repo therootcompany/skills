@@ -39,18 +39,12 @@ Gitignored, ephemeral, worktree/session-specific. Contains what differs between 
 ## Project skills
 
 Project-specific skills go in `./skills/<prefix>-<name>/SKILL.md` and are committed
-to the repo. Every project skill must have a project prefix (e.g. `paperos-`,
-`myapp-`) so it's visually distinct from global skills when listed alongside them.
-
-Symlink each into `~/Agents/skills/` so the harness discovers them:
-
-```sh
-ln -s ~/path/to/project/skills/myapp-deploy ~/Agents/skills/myapp-deploy
-```
+to the repo. Every project skill must have a project prefix (e.g. `bnna-`,
+`authd-`) so it's visually distinct from global skills when listed alongside them.
 
 ### Index skill per repo
 
-When a repo has 3+ skills, create an index in the AGENTS.md Skills section - a table
+Create a skill index in the AGENTS.md Skills section - a table
 listing each skill and when to use it. This lets agents decide which skills to load
 without reading every SKILL.md body. See the global `~/Agents/skills/AGENTS.md` for
 the pattern.
@@ -67,6 +61,7 @@ Standard layout for agent-assisted projects:
 /agents/TASKS.md    - Session task tracking (gitignored)
 /agents/REVIEW.md   - Questions needing feedback (gitignored)
 /agents/HANDOFF.md  - Context for next agent (gitignored)
+/agents/issues.d/   - Issue tracking (gitignored)
 /agents/tmp/        - Temporary files, clones, scratch work (gitignored)
 ```
 
@@ -83,6 +78,6 @@ LOCAL.md
 agents/TASKS.md
 agents/REVIEW.md
 agents/HANDOFF.md
-agents/ISSUES.md
+agents/issues.d/
 agents/tmp/
 ```

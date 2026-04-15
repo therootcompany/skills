@@ -62,15 +62,22 @@ Each reviewer agent gets a prompt like:
 - God functions (>100 lines doing multiple concerns)
 - Untestable code (functions that require real infra to exercise)
 - Hidden dependencies (global state, implicit ordering, `time.Now()` in logic)
+- MUST: Business logic must not be embedded in HTTP handlers. Handlers should be thin adapters that parse input, call domain functions, and write output. Domain logic (authorization code validation, PKCE verification, token creation) must be pure functions callable from tests without HTTP machinery.
 - Separation of concerns (business logic mixed with I/O)
+- Store/interface pattern — If one package correctly uses an interface for dependency injection (e.g., CredentialStore), other packages doing similar work should not bypass it by aquiring connections directly and creating Queries inline
 - Config struct bloat (>15 fields, per-instance fields hardcoded)
+- MUST: Main function testability — all initialization in main() makes unit testing impossible. Extract to `run(ctx context.Context, cfg *Config) error` or similar. Keep main() minimal: parse flags → validate config → call run.
+- MUST: Database health checks — `pgxpool.New` succeeds even if database unreachable (lazy connection). First request fails. MUST ping after pool creation and in `/health` endpoint to fail fast on startup and report readiness correctly.
 
 ### Code Quality
 - Duplicated logic across packages (especially filter functions, ordering maps)
 - In-place mutation of shared data structures
 - Inconsistent error handling (fatal vs warning for similar failures)
 - Swallowed errors (silently using default on parse failure)
+- MUST: Errors must be distinguishable — returning zero-value for both "not found" and "database error" makes debugging impossible. Use sentinel errors or custom error types.
 - Missing context propagation (no cancellation, no timeouts)
+- MUST: Context flows down from HTTP handlers to all downstream calls. Breaking the chain with `context.Background()` loses request-scoped values (tracing IDs, auth tokens, timeouts) and disables cancellation on SIGTERM.
+- CLI flag/ENV semantics: Must track whether flag was explicitly provided. `if envPort != "" && *port == "3080"` fails when user passes `-port 3080` explicitly — env var still overrides. Use `flag.IsSet()` or empty-string default to detect "no flag provided".
 
 ### Testability
 - MUST: Functions must not call `time.Now()`, `time.Since()`, or other
@@ -86,12 +93,16 @@ Each reviewer agent gets a prompt like:
 - Sequential operations on independent resources
 - Read-modify-write without transactions or locks
 - N+1 query patterns in loops
+- MUST: Servers MUST handle graceful shutdown — catch SIGTERM/SIGINT, call `server.Shutdown(ctx)` with timeout, wait for in-flight requests to complete. Abrupt termination (`http.ListenAndServe` returns on error only) cuts off active connections.
+- MUST: Context hierarchy — startup context (10s timeout for DB ping, key loading), request context (from r.Context()), shutdown context (5s drain timeout). Don't reuse contexts across these boundaries.
 
 ### Go Idioms
 - Use `errors.Is` / `errors.As` instead of string matching
 - Domain types should not leak database types across package boundaries
 - Prefer returning new slices over in-place mutation
 - Map iteration order is non-deterministic — sort keys when order matters
+- MUST: Panic in library code is wrong — return errors instead. Library code cannot know the caller's context. What's unrecoverable in a CLI may be retryable in a server. `json.Marshal` failure in library code should return error, not panic.
+- MUST: Error wrapping conventions — `fmt.Errorf("context: %w", err)` preserves the original for `errors.Is`. Plain `fmt.Errorf("msg")` creates a new error each call, breaking `errors.Is` comparison to package-level vars.
 
 ## Output Format
 

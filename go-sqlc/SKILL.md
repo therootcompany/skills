@@ -27,6 +27,8 @@ sqlc generate
   or `= ANY(sqlc.arg('ids')::text[])` (PostgreSQL).
 - MUST: Include the grouping column in batch queries (e.g. `resource_id`) so
   results can be partitioned client-side.
+- MUST: One column per line in INSERT, VALUES, and SET clauses. Don't bunch
+  multiple columns on a single line — it's harder to scan, diff, and reorder.
 - PREFER: Explicit column lists over `SELECT *` / `RETURNING *`.
 
 ## Parameter syntax
@@ -132,6 +134,14 @@ sql:
 ```
 
 After adding or changing a migration, run `sqlc generate` to regenerate Go types.
+
+## SQLite gotchas
+
+- **CHAR columns map to `interface{}`:** sqlc's SQLite engine doesn't recognize
+  `CHAR(n)` or `VARCHAR(n)`. Use column-level overrides (not `db_type`) — see
+  `lite-todos/sqlc.yaml`.
+- **Foreign keys off by default:** Use `_pragma=foreign_keys(1)` in the DSN:
+  `sql.Open("sqlite", "app.db?_pragma=foreign_keys(1)")`
 
 ## PostgreSQL type mappings (pgx/v5)
 
