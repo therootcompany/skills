@@ -1,14 +1,8 @@
-paperos-*
-*
+LOCAL.md
+tmp
+agents
 
 *.env
 .env
 env.*
 !example.env
-
-*.tmp
-*.tmp.d
-tmp
-
-LOCAL.md
-SESSION.md
