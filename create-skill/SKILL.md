@@ -1,30 +1,28 @@
 ---
 name: create-skill
-description: Create a SKILL.md. Triggered when user asks to create a skill, document a pattern, or convert docs into a skill.
+description: Create a SKILL.md — frontmatter, naming, description heuristics, body structure, priority markers (MUST/PREFER), core tier compression, scripts-as-context patterns, and skill types (index, convention, procedure, cleanup). Use when adding a new skill, converting a doc into a skill, or refactoring existing skill content.
 ---
 
-## Discovery
+## Placement and discovery
 
-Harness scans for `SKILL.md` in known directories:
+| Scope   | Path                              | Commit?         |
+| ------- | --------------------------------- | --------------- |
+| Global  | `~/Agents/skills/<name>/SKILL.md` | To skills repo  |
+| Project | `./skills/<name>/SKILL.md`        | To project repo |
 
-| Location | Path | Scope |
-|----------|------|-------|
-| Global | `~/Agents/skills/<name>/SKILL.md` | All projects |
-| Project | `./skills/<name>/SKILL.md` | Current project only |
-
-Project skills committed to git live at `./skills/<name>/SKILL.md`, symlinked into `~/Agents/skills/` so harness finds them:
+Project skills must be symlinked into `~/Agents/skills/` so the harness finds them:
 
 ```sh
-ln -s ~/path/to/project/skills/my-skill ~/Agents/skills/my-skill
+ln -s "$(pwd)/skills/<name>" "$HOME/Agents/skills/<name>"
 ```
+
+When creating a skill, ask first: **specific to one repo, or useful across projects?** Project-only skills must carry a project prefix (e.g. `bnna-deploy-customer-app`).
 
 ## Naming
 
-- Directory name = `name` field exactly
-- Lowercase, numbers, hyphens only (max 64 chars)
-- No leading/trailing/consecutive hyphens
-- Action-oriented: `golang-sqlc`, `shell-scripting`, `create-skill`
-- Project skills use project prefix: `paperos-create-new-api-sheets-csv`
+- Directory name **must equal** the `name` frontmatter field exactly.
+- Lowercase, digits, hyphens only. Max 64 chars. No leading/trailing/consecutive hyphens.
+- Action-oriented: `golang-sqlc`, `shell-scripting`, `create-skill`.
 
 ## Frontmatter
 
@@ -35,12 +33,12 @@ description: Does X. Use when [trigger keywords]. Covers [scope].
 ---
 ```
 
-### Required fields
+### Required
 
 - `name` — becomes `/slash-command`. Falls back to directory name if omitted.
-- `description` — harness reads this to decide when to auto-load. Write for the machine, not the human. Include trigger keywords and scope. Max 1024 chars.
+- `description` — see "Description field" below. Max 1024 chars.
 
-### Optional fields
+### Optional
 
 | Field | Type | Purpose |
 |-------|------|---------|
@@ -215,78 +213,13 @@ postgres --version
 
 ## Skill types
 
-### Index skill
+Pick the shape that matches what the skill *does*:
 
-Points to focused sub-skills. Short, no procedures. Example: `go` skill.
+| Type           | Purpose                                              | Shape                                            | Example                          |
+| -------------- | ---------------------------------------------------- | ------------------------------------------------ | -------------------------------- |
+| Index          | Route to focused sub-skills                          | One table, no procedures                         | `golang`, `postgres`             |
+| Convention     | Rules and patterns                                   | MUST/PREFER bullets + code examples + tables     | `shell-scripting`, `golang-auth` |
+| Procedure      | Step-by-step workflow                                | Numbered sections, each ending in a verify step  | `bnna-deploy-customer-app`       |
+| Cleanup/review | Checklist of things to fix                           | Categorized fix list, often regex-style          | `strip-ai-tells`, `simplify`     |
 
-```markdown
-## Focused skills
-
-| Skill | When to use |
-|-------|-------------|
-| `golang-http-handlers` | HTTP handlers, ServeMux routes, middleware |
-| `golang-sqlc` | sqlc query design, code generation |
-```
-
-### Convention skill
-
-Rules and patterns. Heavy on code examples and tables. Example: `shell-scripting`.
-
-```markdown
-## Basics
-
-- **POSIX sh only.** Use `#!/bin/sh` - never bash.
-- **Always `set -eu`.** Exit on error, error on undefined variables.
-
-## Variable naming
-
-| Prefix | Scope | Example |
-|--------|-------|---------|
-| `g_` | Global to script | `g_base_url` |
-| `b_` | Block-scoped | `b_count` |
-```
-
-### Procedure skill
-
-Step-by-step workflow. Numbered sections, decision tables for branching. Example: `paperos-create-new-api-sheets-csv`.
-
-```markdown
-## 1. Write SQL query
-
-Add to `db/queries/mariadb/<table>.sql`:
-...
-
-## 2. Generate Go code
-...
-
-## 3. Add handler
-...
-```
-
-### Cleanup/review skill
-
-Checklist of things to fix. Example: `strip-ai-tells`.
-
-```markdown
-## Formatting rules
-
-### Dashes
-
-- Replace m-dashes with spaced single hyphen (` - `)
-- Exception: leave alone in code comments where author already uses them
-
-### Arrows
-
-- Replace arrows with `=>`
-```
-
-## Placement
-
-| Scope | Path | Commit? |
-|-------|------|---------|
-| Global | `~/Agents/skills/<name>/SKILL.md` | To skills repo |
-| Project | `./skills/<name>/SKILL.md` | To project repo |
-
-Project skills need a symlink in `~/Agents/skills/` for the harness to find them.
-
-When creating a skill, ask: "Specific to one repo, or useful across projects?"
+(For procedure skills, see "Procedure skills: verification" above for the per-step verify rule.)

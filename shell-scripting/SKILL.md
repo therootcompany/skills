@@ -1,6 +1,6 @@
 ---
 name: shell-scripting
-description: POSIX shell scripting conventions. Use when writing any shell script (.sh file), inline shell commands, or reviewing shell code. Covers shebang, error handling, variable naming, function naming, test syntax, JSON processing, and secrets hygiene.
+description: POSIX shell scripting conventions. Use when writing any .sh file, non-trivial inline shell commands, or reviewing shell code. Covers shebang, set -eu, subshell error capture, variable/function naming, full-flag style, test syntax, jq, secrets hygiene, install order, and shfmt/shellcheck.
 ---
 
 ## Basics
@@ -80,6 +80,12 @@ description: POSIX shell scripting conventions. Use when writing any shell scrip
 - `fn_name` - helper functions (anything other than the main/entry function)
 - `cmd_name` - command aliases, e.g. `cmd_curl='curl --fail-with-body -sSL'`
 
+## Flag style
+
+- MUST: Use full flag names in committed code (scripts, docs, help text,
+  templates) — `--verbose`, not `-v`. Long names self-document; short flags
+  require a man page to read. Short flags are fine at the interactive prompt.
+
 ## JSON processing
 
 - MUST: Use `jq` for all JSON processing - never python one-liners.
@@ -119,8 +125,9 @@ MUST: Run both before committing:
 
 ```sh
 shellcheck script.sh
-shfmt -i 3 -sr -ci -s -w script.sh
+shfmt -i 0 -sr -ci -s -w script.sh
 ```
 
-Flags: `-i 3` (3-space indent), `-sr` (space before redirects), `-ci` (indent
-case bodies), `-s` (simplify), `-w` (write in-place, omit to diff only).
+Flags: `-i 0` (tabs — matches the PostToolUse auto-fixer; using anything else
+will get clobbered on the next Edit/Write), `-sr` (space before redirects),
+`-ci` (indent case bodies), `-s` (simplify), `-w` (write in place; omit for diff).

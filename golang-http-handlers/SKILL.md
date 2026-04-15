@@ -1,13 +1,11 @@
 ---
 name: golang-http-handlers
-description: HTTP routing and middleware patterns. Use when writing handlers, ServeMux routes, or middleware chains.
+description: HTTP handler patterns — ServeMux routing with method-prefixed patterns, middleware composition, request-context propagation, structured error responses with sentinel mapping, connection-aware writes, embedded static file serving, and host-aware multi-portal mounts. Use when writing handlers, mux routes, middleware chains, or static-asset serving.
 ---
 
-## Production-first
+Build for production from the start. Error handling, logging, auth, graceful shutdown belong in the initial implementation — not polish.
 
-Build for production from the start. Error handling, logging, auth, graceful shutdown are part of initial implementation, not polish.
-
-## API Router
+## API router
 
 ```go
 mux := http.NewServeMux()
@@ -100,9 +98,7 @@ func logRequests(next http.HandlerFunc) http.HandlerFunc {
 
 ## Request context
 
-MUST: Pass `r.Context()` into every downstream I/O call — DB queries,
-outbound HTTP, file ops. When the client disconnects or the server
-receives SIGTERM, the ctx cancels and the work unwinds cleanly.
+MUST: Pass `r.Context()` into every downstream I/O call — DB queries, outbound HTTP, file ops. Client disconnect or SIGTERM cancels the ctx and the work unwinds cleanly.
 
 ```go
 func handleGetItem(w http.ResponseWriter, r *http.Request) {
@@ -111,10 +107,7 @@ func handleGetItem(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-Never call a store method with `context.Background()` from a handler.
-That disconnects the request from cancellation and leaks work across
-client hangups and shutdown. If a store method lacks a ctx parameter,
-that's a bug in the store — fix the signature, don't paper over it.
+NEVER call a store method with `context.Background()` from a handler — disconnects the request from cancellation and leaks work across hangups and shutdown. A store method without a ctx parameter is a bug in the store; fix the signature, don't paper over it. (See `golang` skill → "Context propagation" for root-ctx + signal wiring.)
 
 ## Error responses at the boundary
 
@@ -261,7 +254,7 @@ func (m *MountedFS) Open(name string) (fs.File, error) {
 - NEVER: Load CSS/JS/fonts from CDNs (unpkg, jsdelivr). Vendor into
   `web/lib/` — one origin, auditable, no runtime dependency.
 
-## TSV Endpoint
+## TSV endpoint (minimal)
 
 ```go
 func HandleItemsAllTSV(w http.ResponseWriter, r *http.Request) {
@@ -270,10 +263,12 @@ func HandleItemsAllTSV(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "text/tab-separated-values; charset=utf-8")
     enc := csvutil.NewEncoder(w)
     enc.Delimiter = '\t'
-    for _, row := range rows { enc.Encode(row) }
+    for _, row := range rows { _ = enc.Encode(row) }
 }
 ```
 
+For the full TSV/CSV/JSON/Markdown negotiation pattern (handlers that serve every format from one payload), use `design-tsv-json-api-responses`.
+
 ## Testing
 
-Prefer real code over mocks. Test actual behavior — real DB queries, real handler logic — not fakes.
+Prefer real code over mocks. Test actual behavior — real DB queries, real handler logic via `httptest.NewServer`. Mocks pass when reality doesn't.

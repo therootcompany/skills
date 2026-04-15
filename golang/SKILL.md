@@ -1,21 +1,22 @@
 ---
 name: golang
-description: Go project conventions — index of focused skills, error handling, and config rules. Load this first; it points to the right sub-skill for any Go task.
+description: Go project conventions index — points to the right sub-skill for any Go task and covers project structure, package naming, pre-commit, error handling (sentinels at boundaries), and context propagation. Load first for any Go work.
 ---
 
 ## Focused skills
 
-| Skill                      | When to use                                                        |
-| -------------------------- | ------------------------------------------------------------------ |
-| `golang-stack`             | Approved libraries, import paths, version features, build commands |
-| `golang-http-handlers`     | HTTP handlers, ServeMux routes, middleware                         |
-| `golang-cli-flags`         | CLI tools, flag.FlagSet, argument parsing                          |
-| `golang-auth`              | Authentication, API keys, JWT, csvauth                             |
-| `go-db-migrations`         | Database schema migrations                                         |
-| `golang-sqlc`              | sqlc query design, code generation                                 |
-| `golang-import-sheet-data` | Google Sheets to CSV/TSV/ENV                                       |
-| `golang-review-style`      | Code style/architecture review with named agents                   |
-| `golang-review-security`   | Security vulnerability review with named agents                    |
+| Skill                      | When to use                                                          |
+| -------------------------- | -------------------------------------------------------------------- |
+| `golang-stack`             | Approved libraries, import paths, version features, build commands   |
+| `golang-http-handlers`     | HTTP handlers, ServeMux routes, middleware                           |
+| `golang-cli-flags`         | CLI tools, `flag.FlagSet`, argument parsing                          |
+| `golang-auth`              | Authentication, API keys, JWT, csvauth                               |
+| `golang-sqlc`              | sqlc query design, code generation                                   |
+| `sql-db-migrations`        | DB schema migrations (index — picks the right migration sub-skill)   |
+| `golang-import-sheet-data` | Google Sheets → CSV/TSV/ENV                                          |
+| `use-modern-go`            | Modern syntax for the project's Go version (`for range N`, etc.)     |
+| `golang-review-style`      | Code style/architecture review with named agents                     |
+| `golang-review-security`   | Security vulnerability review with named agents                      |
 
 ## Project structure
 
@@ -35,53 +36,32 @@ If unsure whether something belongs in `cmd` or `internal`, ask.
 
 ## Pre-commit
 
-MUST: Run `scripts/golint` before every commit in Go projects. The script
-lives in `golang-stack/scripts/golint` and handles monorepos (depth-first
-`go.mod` walk with fmt, imports, fix, vet, tidy per module). Copy it into
-the project's `scripts/` directory.
+MUST: Run `./scripts/golint` before every commit. Monorepo-aware (depth-first
+`go.mod` walk: fmt, imports, fix, vet, tidy per module). Copy it from
+`~/Agents/skills/golang-stack/scripts/golint` into the project's `scripts/`
+on first use.
 
-## Error Handling
+## Error handling
 
-MUST check errors, or explicitly discard
+- MUST: Check every error or explicitly discard with `_ =`. NEVER use `//nolint:errcheck`.
+- MUST: Return sentinel errors at package boundaries where callers branch on failure mode. Callers match with `errors.Is`; clients never see raw `err.Error()`.
 
 ```go
+// Discard intentionally
 _ = f.Close()
+defer func() { _ = f.Close() }()
 
-defer func() {
-    _ = f.Close()
-}
+// Sentinels + wrapping (broad → specific). Wrap unexpected failures so
+// the sentinel still matches under errors.Is.
+var ErrNotFound    = errors.New("not found")
+var ErrInvalidClaim = errors.New("invalid claim")
+var ErrAfterExp    = fmt.Errorf("%w: exp: token expired", ErrInvalidClaim)
+
+return fmt.Errorf("store: lookup %s: %w", id, ErrNotFound)
+return errors.Join(errs...) // multi-error: collect, return once
 ```
 
-NEVER use `//nolint:errcheck`
-
-```go
-// Sentinel errors
-var ErrNotFound = errors.New("not found")
-
-// Wrapping: broad → specific
-fmt.Errorf("%w: exp: token expired", ErrInvalidClaim)
-
-// Composable hierarchies
-var ErrAfterExp = fmt.Errorf("%w: exp: token expired", ErrInvalidClaim)
-
-// Multi-error
-return errors.Join(append(errs, fmt.Errorf("exp: %w", ErrMissingClaim))...)
-```
-
-### Sentinel errors at trust boundaries
-
-MUST: At every package boundary where callers need to branch on failure
-mode, return a **sentinel** error the caller can match with `errors.Is`.
-Do NOT return raw `err.Error()` strings to clients, and do NOT force
-callers to string-match messages.
-
-- Store/repo packages: return `ErrNotFound`, `ErrConflict`,
-  `ErrTenantNotFound`, etc. Wrap unexpected failures with
-  `fmt.Errorf("pkg: context: %w", err)` so the sentinel still matches.
-- HTTP handlers: map sentinels to status codes + short client message.
-  Log the full error (and a request ID) server-side; return an opaque
-  `"internal error"` + request ID for unexpected failures so clients
-  can report it without leaking infra detail.
+Boundary mapping — store returns sentinels, handler maps them:
 
 ```go
 switch {
@@ -90,8 +70,9 @@ case errors.Is(err, store.ErrNotFound):
 case errors.Is(err, store.ErrConflict):
     http.Error(w, "conflict", 409)
 default:
-    log.Printf("req=%s: %v", reqID, err)
-    http.Error(w, "internal error: "+reqID, 500)
+    reqID := middleware.RequestID(r.Context())
+    log.Printf("req=%s: %v", reqID, err)        // full detail server-side
+    http.Error(w, "internal error: "+reqID, 500) // opaque + req ID for client
 }
 ```
 

@@ -1,16 +1,20 @@
 ---
 name: golang-auth
-description: golib auth modules (csvauth, envauth, jwt). Use when implementing HTTP authentication, API keys, or JWT handling.
+description: golib auth modules (csvauth, envauth, jwt) plus AES-256-GCM secret envelopes. Use when implementing HTTP authentication, API keys, JWT issuance/verification/validation, OIDC session cookies, or storing application secrets at rest without a KMS.
 ---
 
-## Auth module hierarchy
+## Modules
 
-Each is a separate Go module with its own `go.mod`. Import by full path:
+Each is a separate Go module with its own `go.mod` — import by full path:
 
-- `github.com/therootcompany/golib/auth` — `BasicRequestAuthenticator` extracts credentials from HTTP requests (Basic, Bearer, headers, query params)
-- `github.com/therootcompany/golib/auth/envauth` — `BasicCredentials{Username, Password}` from environment for single-user auth
-- `github.com/therootcompany/golib/auth/csvauth` — `Auth` loads credentials.tsv for multi-user, tokens, service accounts
-- `github.com/therootcompany/golib/auth/jwt` — `Signer`, `Verifier`, `Validator` for JWT with JWKS endpoint
+| Import                                              | Provides                                                      |
+| --------------------------------------------------- | ------------------------------------------------------------- |
+| `github.com/therootcompany/golib/auth`              | `BasicRequestAuthenticator` — pulls creds from Basic/Bearer/header/query |
+| `github.com/therootcompany/golib/auth/envauth`      | `BasicCredentials{Username,Password}` — single-user from env  |
+| `github.com/therootcompany/golib/auth/csvauth`      | `Auth` — multi-user / tokens / service accounts from TSV      |
+| `github.com/therootcompany/golib/auth/jwt`          | `Signer`, `Verifier`, `Validator` — JWT + JWKS                |
+
+Pick by deployment shape: one operator on a VM → envauth. Multi-tenant or rotating tokens → csvauth. Federated identity / cross-service trust → jwt.
 
 ## Credentials (csvauth)
 
@@ -175,4 +179,4 @@ Rules:
 - Key rotation: decrypt-with-old + re-encrypt-with-new sweep. Support
   two keys via a `[]byte` list if rotation is ongoing.
 
-See `~/Agents/skills/go-develop/references/examples/` for full auth_example.go, envauth_example.go, jwt_example.go.
+See `~/Agents/skills/golang/references/examples/` for full `auth_example.go`, `envauth_example.go`, `jwt_example.go`.
