@@ -85,6 +85,16 @@ MUST: Every function performing I/O (DB, HTTP, file, network) takes `ctx context
 
 Store interfaces must be `CreateFoo(ctx context.Context, …) error`, not `CreateFoo(…) error`. Load-bearing signature — a package that omits ctx forces every caller to forfeit cancellation.
 
+### Lifecycle and audit defaults
+
+For API-backed mutable resources, default to lifecycle fields and auditability:
+
+- Use `created_at`, `updated_at`, and `deleted_at` (soft delete by default).
+- Keep actor/action attribution in audit logs rather than row-level `deleted_by`.
+- If supporting incremental sync, use `?since=` with explicit `created`/`updated`/`deleted` semantics.
+
+Implementation details and handler patterns live in `golang-http-handlers`.
+
 ## Config
 
 - NEVER YAML unless required by a 3rd-party tool.

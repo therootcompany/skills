@@ -106,6 +106,34 @@ func handleGetItem(w http.ResponseWriter, r *http.Request) {
 
 NEVER call a store method with `context.Background()` from a handler — disconnects the request from cancellation and leaks work across hangups and shutdown. A store method without a ctx parameter is a bug in the store; fix the signature, don't paper over it. (See `golang` skill → "Context propagation" for root-ctx + signal wiring.)
 
+## Resource lifecycle and sync fields
+
+For mutable resources exposed by APIs, standardize lifecycle fields:
+
+- `created_at`: set once at create.
+- `updated_at`: set on every mutation.
+- `deleted_at`: `NULL` when active; set when soft-deleted.
+
+Prefer soft delete by default. Hard delete should be exceptional and explicit.
+
+### `since` delta contract
+
+If an endpoint accepts `?since=<iso|epoch>`, keep semantics stable:
+
+- `created`: active rows where `created_at > since`.
+- `updated`: active rows where `updated_at > since` and `created_at <= since`.
+- `deleted`: rows where `deleted_at > since`.
+
+Normal list/get endpoints should exclude rows with non-NULL `deleted_at` unless the route is explicitly for deleted resources.
+
+### Audit logging
+
+Destructive and lifecycle-changing actions (delete, undelete, reset, etc.) must emit audit log entries.
+
+- Keep actor attribution (`who did it`) in audit logs, not denormalized columns.
+- Resolve actor from request auth context (tenant identity or operator identity, including impersonation metadata when present).
+- If a caller can audit-read a resource, they can inspect who deleted/undeleted via audit history.
+
 ## Error responses at the boundary
 
 MUST: Handlers map sentinel errors to status + short client message.
