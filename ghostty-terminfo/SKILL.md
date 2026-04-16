@@ -1,6 +1,6 @@
 ---
 name: ghostty-terminfo
-description: Push Ghostty terminal info to remote servers. Use when SSH shows "Error opening terminal: xterm-ghostty" or "terminal is not fully functional". Covers terminfo installation for remote hosts.
+description: "Push Ghostty terminal info to remote servers. Use when SSH shows \"Error opening terminal: xterm-ghostty\" or \"terminal is not fully functional\". Covers terminfo installation for remote hosts."
 ---
 
 ## Problem
